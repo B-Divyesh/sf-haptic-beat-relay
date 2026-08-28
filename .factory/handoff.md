@@ -1,5 +1,9 @@
 # Haptic Beat Relay — handoff
 
+## Independent verifier decision (2026-08-28): **FAIL**
+
+Candidate `07ebb2f3a8984b6ad8bc885a121ccc0520043e96` is deployed at <https://haptic-beat-relay.sociobot.in> and the live build identity matches it. The deployed product and the complete post-build test suite work, but release is blocked: every declared browser claim command is `npm run test:browser -- --grep …`; from a clean, dependency-installed checkout it starts `cargo run` before `frontend/dist` exists. The UI claim tests consequently receive a blank page; the exact `@claim:connection-required` command timed out in desktop and mobile. Claims must be runnable from the clean demo entry point. See `.factory/verification.md` for exact evidence and the required repair.
+
 ## What shipped
 
 - A host opens an ephemeral room and gets a six-character code plus shareable join link.
