@@ -17,6 +17,29 @@ test('landing page explains the job and passes an accessibility scan', async ({ 
   expect(errors).toEqual([]);
 });
 
+test('keyboard users can skip navigation, change routes, and recover from form errors', async ({ page }) => {
+  await page.goto('/join');
+  await page.keyboard.press('Tab');
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toHaveCSS('outline-width', '3px');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/join#main$/);
+
+  await page.goto('/');
+  const demoLink = page.getByRole('link', { name: 'Try it with sample data' });
+  await demoLink.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/demo$/);
+  await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
+
+  await page.goto('/join');
+  await page.locator('#join-code').fill('A2');
+  await page.locator('#join-code').press('Enter');
+  await expect(page.locator('#join-error')).toHaveText('The code needs six letters and numbers. Check it and try again.');
+  await expect(page.locator('#join-code')).toBeFocused();
+});
+
 test('@claim:demo-sandbox sample round starts in one click and reset clears it', async ({ page }) => {
   await page.goto('/demo');
   await expect(page.getByText('Demo — sample data, nothing is saved')).toBeVisible();
@@ -115,5 +138,8 @@ test('real routes have one heading, useful titles, and no mobile overflow', asyn
       accessibility.violations.filter((item) => ['critical', 'serious'].includes(item.impact ?? '')),
       `${route} accessibility in ${testInfo.project.name}`,
     ).toEqual([]);
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const resizedOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(resizedOverflow, `${route} overflow at 200% text size in ${testInfo.project.name}`).toBeLessThanOrEqual(1);
   }
 });

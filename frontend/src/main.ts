@@ -257,7 +257,7 @@ function notFoundPage(): string {
   </main>${footer()}`;
 }
 
-function navigate(path: string, push = true): void {
+function navigate(path: string, push = true, focusHeading = true): void {
   cleanupPage?.();
   cleanupPage = undefined;
   if (push && location.pathname !== path) {
@@ -286,8 +286,10 @@ function navigate(path: string, push = true): void {
 
   window.scrollTo(0, push ? 0 : Number(history.state?.scrollY ?? 0));
   const heading = app.querySelector<HTMLElement>('h1');
-  heading?.focus({ preventScroll: true });
-  routeAnnouncement.textContent = heading?.textContent ?? '';
+  if (focusHeading) {
+    heading?.focus({ preventScroll: true });
+    routeAnnouncement.textContent = heading?.textContent ?? '';
+  }
 }
 
 function bindGlobalActions(): void {
@@ -593,7 +595,7 @@ function setupDemo(): void {
 
 history.scrollRestoration = 'manual';
 window.addEventListener('popstate', () => navigate(location.pathname, false));
-navigate(location.pathname, false);
+navigate(location.pathname, false, false);
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined));

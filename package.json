@@ -8,8 +8,9 @@
     "build": "tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts",
     "start": "cargo run --release",
     "test:unit": "vitest run --config frontend/vitest.config.ts",
-    "test:browser": "playwright test",
-    "test": "npm run build && npm run test:unit && cargo test && npm run test:browser"
+    "test:browser": "npm run build && playwright test",
+    "test:clean-entrypoint": "node scripts/verify-clean-browser-entrypoint.mjs",
+    "test": "npm run test:unit && cargo test && npm run test:clean-entrypoint && playwright test"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",

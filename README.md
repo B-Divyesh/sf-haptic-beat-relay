@@ -30,7 +30,15 @@ For frontend work with live reload, run the backend and `npm run dev` in separat
 npm test
 ```
 
-This builds the frontend, runs TypeScript unit tests, runs Rust API tests, and runs Playwright in desktop and 390 px mobile views. Claim-specific commands are listed in [.factory/claims.json](.factory/claims.json).
+This runs TypeScript unit tests, Rust API tests, the clean-entry-point regression, and Playwright in desktop and 390 px mobile views. The browser-test entry point builds the production frontend, so every claim-specific command in [.factory/claims.json](.factory/claims.json) works after a clean `npm ci` without a separate build step.
+
+To run the verifier regression by itself:
+
+```sh
+npm run test:clean-entrypoint
+```
+
+It removes only the generated `frontend/dist` directory, runs the exact previously failing claim command, and checks that the browser entry point rebuilt the app.
 
 ## How it works
 

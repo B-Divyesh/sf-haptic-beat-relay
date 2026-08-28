@@ -186,17 +186,22 @@ input::file-selector-button { min-height: 36px; margin-right: 12px; padding: 4px
 
 @media (max-width: 480px) {
   .site-header, .site-footer, main { width: min(100% - 24px, 1200px); }
-  .site-header { min-height: 64px; }
+  .site-header { min-height: 64px; flex-wrap: wrap; padding-block: 8px; }
+  .site-header nav { width: 100%; justify-content: space-between; }
   .site-header nav a:first-child { display: none; }
-  .eyebrow { overflow-wrap: anywhere; }
+  h1, h2, .eyebrow { overflow-wrap: anywhere; }
+  h1 { font-size: clamp(2rem, 17vw, 5rem); }
+  .room-heading h1, .join-shell > h1, .legal-main h1, .lost-main h1 { font-size: clamp(2rem, 14vw, 4rem); }
+  .hero-copy, section, article, .code-board > div, .preview-section > *, .limits-section > * { min-width: 0; }
   .hero { padding-top: 48px; }
-  h1 { font-size: clamp(3.2rem, 17vw, 5rem); }
+  .hero-art { width: 100%; margin-inline: 0; }
   .hero-action-row { align-items: flex-start; flex-direction: column; }
   .hero-action-row > span { max-width: none; }
+  .button { max-width: 100%; text-align: center; white-space: normal; }
   .preview-section, .steps-section, .limits-section { padding-block: 72px; }
   .signal-stage, .controls-panel, .round-panel, .companion-stage, .join-form { padding: 24px 20px; }
   .code-board { padding: 20px; align-items: flex-start; flex-direction: column; }
-  .code-board strong { font-size: 3.2rem; }
+  .code-board strong { max-width: 100%; font-size: clamp(2rem, 13vw, 3.2rem); letter-spacing: .1em; overflow-wrap: anywhere; }
   .round-panel { min-height: 420px; }
   .demo-banner { align-items: flex-start; flex-direction: column; padding-block: 8px; }
   .demo-actions { width: 100%; justify-content: space-between; }
