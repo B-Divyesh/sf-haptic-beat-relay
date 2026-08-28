@@ -4,7 +4,14 @@
     "claim": "Try a paired sample round without setup or saved data.",
     "where": "landing primary action, demo banner, README",
     "test": "npm run test:browser -- --grep @claim:demo-sandbox",
-    "sandbox": "fresh browser context at /demo; start the seeded round and reset it"
+    "sandbox": "fresh browser context at /demo; start and reset the seeded round while asserting no API requests or browser storage"
+  },
+  {
+    "id": "sample-duration",
+    "claim": "The sample round lasts 12 seconds.",
+    "where": "demo setup, README, demo guide",
+    "test": "npm run test:browser -- --grep @claim:sample-duration",
+    "sandbox": "fresh browser context at /demo; start the sample, verify it remains active before completion, then observe its 12-second completion"
   },
   {
     "id": "local-audio",
@@ -45,8 +52,8 @@
     "id": "ephemeral-rooms",
     "claim": "Room state stays in memory for up to two hours and disappears on restart.",
     "where": "landing limits, privacy, README",
-    "test": "npm run test:browser -- --grep @claim:ephemeral-rooms",
-    "sandbox": "fresh request context; create a room and assert the API reports a 7200-second in-memory lifetime"
+    "test": "cargo test claim_ephemeral_rooms_evict_after_the_configured_ttl_and_on_restart",
+    "sandbox": "short controllable TTL; assert scheduled eviction rejects a join and a new server instance has no prior room"
   },
   {
     "id": "rate-limit",
@@ -68,5 +75,12 @@
     "where": "landing facts",
     "test": "npm run test:browser -- --grep @claim:connection-required",
     "sandbox": "fresh browser context; go offline before creating a real room and assert the recovery message appears"
+  },
+  {
+    "id": "visual-cue",
+    "claim": "The screen flashes each cue when vibration is unavailable.",
+    "where": "landing limits, README",
+    "test": "npm run test:browser -- --grep @claim:visual-cue",
+    "sandbox": "two fresh browser contexts with vibration unavailable; relay one cue and assert the companion tap pad enters its visual cue state"
   }
 ]

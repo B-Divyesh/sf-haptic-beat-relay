@@ -356,6 +356,11 @@ async function setupHost(): Promise<void> {
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('audio/')) {
+      fileInput.value = '';
+      fileName.textContent = 'Choose an audio file. This file was not loaded.';
+      return;
+    }
     if (objectAudioUrl) URL.revokeObjectURL(objectAudioUrl);
     objectAudioUrl = URL.createObjectURL(file);
     audio = new Audio(objectAudioUrl);
@@ -528,7 +533,7 @@ async function setupCompanion(code: string): Promise<void> {
 }
 
 function cueCompanion(): void {
-  if ('vibrate' in navigator) navigator.vibrate(45);
+  if (typeof navigator.vibrate === 'function') navigator.vibrate(45);
   const pad = document.querySelector('#tap-pad');
   pad?.classList.remove('cue');
   requestAnimationFrame(() => pad?.classList.add('cue'));

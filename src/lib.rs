@@ -40,12 +40,13 @@ const RATE_BURST: u32 = 40;
 pub struct AppState {
     rooms: Arc<Mutex<HashMap<String, Room>>>,
     rates: Arc<Mutex<HashMap<String, RateEntry>>>,
+    room_ttl: Duration,
 }
 
 struct Room {
     host_token: String,
     companion_token: Option<String>,
-    created_at: Instant,
+    expires_at: Instant,
     channel: broadcast::Sender<String>,
 }
 
@@ -59,6 +60,7 @@ impl Default for AppState {
         Self {
             rooms: Arc::new(Mutex::new(HashMap::new())),
             rates: Arc::new(Mutex::new(HashMap::new())),
+            room_ttl: ROOM_TTL,
         }
     }
 }
@@ -82,7 +84,14 @@ struct SocketQuery {
 }
 
 pub fn app(dist_dir: impl Into<String>) -> Router {
-    let state = AppState::default();
+    app_with_room_ttl(dist_dir, ROOM_TTL)
+}
+
+fn app_with_room_ttl(dist_dir: impl Into<String>, room_ttl: Duration) -> Router {
+    let state = AppState {
+        room_ttl,
+        ..AppState::default()
+    };
     let dist_dir = dist_dir.into();
     let api = Router::new()
         .route("/api/rooms", post(create_room))
@@ -98,6 +107,7 @@ pub fn app(dist_dir: impl Into<String>) -> Router {
                 .append_index_html_on_directories(true)
                 .fallback(ServeFile::new(format!("{dist_dir}/index.html"))),
         )
+        .layer(middleware::from_fn(mark_unknown_routes_not_found))
         .layer(middleware::from_fn(cache_headers))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
@@ -115,6 +125,40 @@ pub fn app(dist_dir: impl Into<String>) -> Router {
         ))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+async fn mark_unknown_routes_not_found(request: Request<Body>, next: Next) -> Response {
+    let path = request.uri().path().to_owned();
+    let mut response = next.run(request).await;
+    if response.status() == StatusCode::OK && !is_known_frontend_route(&path) {
+        *response.status_mut() = StatusCode::NOT_FOUND;
+    }
+    response
+}
+
+fn is_known_frontend_route(path: &str) -> bool {
+    path.starts_with("/api/")
+        || path == "/health"
+        || matches!(
+            path,
+            "/" | "/demo" | "/host" | "/join" | "/privacy" | "/terms"
+        )
+        || path
+            .strip_prefix("/join/")
+            .is_some_and(|code| normalized_code(code).is_ok())
+        || path.starts_with("/assets/")
+        || path.starts_with("/art/")
+        || matches!(
+            path,
+            "/favicon.svg"
+                | "/apple-touch-icon.png"
+                | "/manifest.webmanifest"
+                | "/robots.txt"
+                | "/sitemap.xml"
+                | "/sw.js"
+                | "/404.html"
+                | "/staticwebapp.config.json"
+        )
 }
 
 async fn cache_headers(request: Request<Body>, next: Next) -> Response {
@@ -139,7 +183,7 @@ async fn health() -> Json<serde_json::Value> {
 
 async fn create_room(State(state): State<AppState>) -> Json<RoomCreated> {
     let mut rooms = state.rooms.lock().await;
-    rooms.retain(|_, room| room.created_at.elapsed() < ROOM_TTL);
+    rooms.retain(|_, room| !room_is_expired(room));
 
     let code = loop {
         let candidate = random_code(6);
@@ -149,21 +193,25 @@ async fn create_room(State(state): State<AppState>) -> Json<RoomCreated> {
     };
     let host_token = random_code(32);
     let (channel, _) = broadcast::channel(128);
+    let expires_at = Instant::now() + state.room_ttl;
     rooms.insert(
         code.clone(),
         Room {
             host_token: host_token.clone(),
             companion_token: None,
-            created_at: Instant::now(),
+            expires_at,
             channel,
         },
     );
 
-    Json(RoomCreated {
+    let created = RoomCreated {
         code,
         host_token,
-        expires_in_seconds: ROOM_TTL.as_secs(),
-    })
+        expires_in_seconds: state.room_ttl.as_secs(),
+    };
+    drop(rooms);
+    schedule_room_expiry(state, created.code.clone(), expires_at);
+    Json(created)
 }
 
 async fn join_room(
@@ -179,7 +227,7 @@ async fn join_room(
             "That room is not open. Check the code with the host.",
         )
     })?;
-    if room.created_at.elapsed() >= ROOM_TTL {
+    if room_is_expired(room) {
         rooms.remove(&code);
         return Err(ApiError::new(
             StatusCode::GONE,
@@ -208,7 +256,7 @@ async fn room_socket(
     ws: WebSocketUpgrade,
 ) -> Result<Response, ApiError> {
     let code = normalized_code(&raw_code)?;
-    let rooms = state.rooms.lock().await;
+    let mut rooms = state.rooms.lock().await;
     let room = rooms.get(&code).ok_or_else(|| {
         ApiError::new(
             StatusCode::NOT_FOUND,
@@ -216,6 +264,14 @@ async fn room_socket(
             "That room is not open. Check the code with the host.",
         )
     })?;
+    if room_is_expired(room) {
+        rooms.remove(&code);
+        return Err(ApiError::new(
+            StatusCode::GONE,
+            "room_expired",
+            "That room expired. Ask the host to make a new room.",
+        ));
+    }
     let valid = match query.role.as_str() {
         "host" => constant_time_eq(&query.token, &room.host_token),
         "companion" => room
@@ -232,12 +288,15 @@ async fn room_socket(
         ));
     }
     let channel = room.channel.clone();
+    let expires_at = room.expires_at;
     let role = query.role;
     let token = query.token;
     drop(rooms);
 
     Ok(ws
-        .on_upgrade(move |socket| socket_session(socket, channel, role, token, code, state))
+        .on_upgrade(move |socket| {
+            socket_session(socket, channel, role, token, code, expires_at, state)
+        })
         .into_response())
 }
 
@@ -247,15 +306,19 @@ async fn socket_session(
     role: String,
     token: String,
     code: String,
+    expires_at: Instant,
     state: AppState,
 ) {
     let (mut socket_tx, mut socket_rx) = socket.split();
     let mut room_rx = channel.subscribe();
+    let expiry = tokio::time::sleep_until(tokio::time::Instant::from_std(expires_at));
+    tokio::pin!(expiry);
     let joined = json!({ "type": "presence", "role": role, "connected": true }).to_string();
     let _ = channel.send(joined);
 
     loop {
         tokio::select! {
+            _ = &mut expiry => break,
             incoming = socket_rx.next() => {
                 match incoming {
                     Some(Ok(Message::Text(text))) if text.len() <= 2048 => {
@@ -272,6 +335,12 @@ async fn socket_session(
             outgoing = room_rx.recv() => {
                 match outgoing {
                     Ok(text) => {
+                        if serde_json::from_str::<serde_json::Value>(&text)
+                            .ok()
+                            .and_then(|value| value.get("type").and_then(|kind| kind.as_str()).map(str::to_owned))
+                            .as_deref() == Some("room_expired") {
+                            break;
+                        }
                         if socket_tx.send(Message::Text(text.into())).await.is_err() {
                             break;
                         }
@@ -282,6 +351,7 @@ async fn socket_session(
             }
         }
     }
+    let _ = socket_tx.send(Message::Close(None)).await;
     if role == "companion" {
         let mut rooms = state.rooms.lock().await;
         if let Some(room) = rooms.get_mut(&code) {
@@ -296,6 +366,28 @@ async fn socket_session(
     }
     let left = json!({ "type": "presence", "role": role, "connected": false }).to_string();
     let _ = channel.send(left);
+}
+
+fn room_is_expired(room: &Room) -> bool {
+    Instant::now() >= room.expires_at
+}
+
+fn schedule_room_expiry(state: AppState, code: String, expires_at: Instant) {
+    tokio::spawn(async move {
+        tokio::time::sleep_until(tokio::time::Instant::from_std(expires_at)).await;
+        let channel = {
+            let mut rooms = state.rooms.lock().await;
+            let should_remove = rooms
+                .get(&code)
+                .is_some_and(|room| room.expires_at == expires_at);
+            should_remove
+                .then(|| rooms.remove(&code).map(|room| room.channel))
+                .flatten()
+        };
+        if let Some(channel) = channel {
+            let _ = channel.send(json!({ "type": "room_expired" }).to_string());
+        }
+    });
 }
 
 fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
@@ -474,6 +566,103 @@ mod tests {
                 .status();
         }
         assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    // @claim:ephemeral-rooms
+    async fn claim_ephemeral_rooms_evict_after_the_configured_ttl_and_on_restart() {
+        assert_eq!(ROOM_TTL, Duration::from_secs(7_200));
+        let application = app_with_room_ttl("frontend/dist", Duration::from_millis(40));
+        let create = application
+            .clone()
+            .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(create.into_body(), 4096)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let code = created["code"].as_str().unwrap();
+
+        tokio::time::sleep(Duration::from_millis(70)).await;
+        let expired_join = application
+            .clone()
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/join"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(expired_join.status(), StatusCode::NOT_FOUND);
+
+        let restarted = app("frontend/dist")
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/join"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(restarted.status(), StatusCode::NOT_FOUND);
+        assert_expiring_room_closes_an_open_websocket().await;
+    }
+
+    async fn assert_expiring_room_closes_an_open_websocket() {
+        let application = app_with_room_ttl("frontend/dist", Duration::from_millis(80));
+        let create = application
+            .clone()
+            .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(create.into_body(), 4096)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let code = created["code"].as_str().unwrap();
+        let token = created["host_token"].as_str().unwrap();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, application).await.unwrap();
+        });
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://{address}/api/rooms/{code}/socket?role=host&token={token}"
+        ))
+        .await
+        .unwrap();
+
+        let closed = tokio::time::timeout(Duration::from_millis(400), async {
+            while let Some(message) = socket.next().await {
+                match message.unwrap() {
+                    tokio_tungstenite::tungstenite::Message::Close(_) => return true,
+                    _ => continue,
+                }
+            }
+            true
+        })
+        .await
+        .unwrap_or(false);
+        server.abort();
+        assert!(closed, "the room socket should close when the room expires");
+    }
+
+    #[tokio::test]
+    async fn unknown_frontend_routes_return_http_not_found() {
+        let response = app("frontend/dist")
+            .oneshot(
+                Request::get("/not-a-real-page")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[test]

@@ -40,12 +40,22 @@ test('keyboard users can skip navigation, change routes, and recover from form e
   await expect(page.locator('#join-code')).toBeFocused();
 });
 
-test('@claim:demo-sandbox sample round starts in one click and reset clears it', async ({ page }) => {
+test('@claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
   await page.goto('/demo');
   await expect(page.getByText('Demo — sample data, nothing is saved')).toBeVisible();
   await expect(page.getByText('Sam is ready', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Start sample round' }).click();
   await expect(page.locator('#tap-count')).not.toHaveText('No returned taps yet.');
+  await expect(page.getByRole('button', { name: 'Sample round in progress' })).toBeDisabled();
+  await page.waitForTimeout(11_000);
+  await expect(page.getByRole('button', { name: 'Sample round in progress' })).toBeDisabled();
+  await page.waitForTimeout(1_100);
+  await expect(page.locator('#round-state')).toContainText('Sample round complete');
+  await expect(page.getByRole('button', { name: 'Run the sample again' })).toBeEnabled();
+  expect(requests.every((url) => !new URL(url).pathname.startsWith('/api/'))).toBe(true);
+  expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
   await page.getByRole('button', { name: 'Reset demo' }).click();
   await expect(page.locator('#score-value')).toHaveText('86%');
 });
@@ -65,7 +75,7 @@ test('@claim:local-audio and @claim:no-third-party uploaded audio stays in the h
   expect(requests.every((request) => new URL(request.url).origin === 'http://127.0.0.1:8080')).toBe(true);
 });
 
-test('@claim:ephemeral-rooms room creation reports its memory lifetime', async ({ request }) => {
+test('room creation reports its memory lifetime', async ({ request }) => {
   const response = await request.post('/api/rooms', { headers: { 'X-Forwarded-For': '203.0.113.33' } });
   expect(response.ok()).toBe(true);
   const room = await response.json() as { code: string; expires_in_seconds: number };
@@ -73,14 +83,15 @@ test('@claim:ephemeral-rooms room creation reports its memory lifetime', async (
   expect(room.expires_in_seconds).toBe(7200);
 });
 
-test('@claim:rate-limit API bursts return 429 and Retry-After', async ({ request }, testInfo) => {
+test('@claim:rate-limit API bursts enforce exactly 40 requests and return Retry-After', async ({ request }, testInfo) => {
   const client = testInfo.project.name === 'mobile' ? '203.0.113.41' : '203.0.113.40';
   const responses = await Promise.all(Array.from({ length: 45 }, () => request.post('/api/rooms', {
     headers: { 'X-Forwarded-For': client },
   })));
-  const limited = responses.find((response) => response.status() === 429);
-  expect(limited).toBeDefined();
-  expect(limited?.headers()['retry-after']).toBe('1');
+  expect(responses.filter((response) => response.status() === 200)).toHaveLength(40);
+  const limited = responses.filter((response) => response.status() === 429);
+  expect(limited).toHaveLength(5);
+  expect(limited.every((response) => response.headers()['retry-after'] === '1')).toBe(true);
 });
 
 test('@claim:health health endpoint returns the build identity', async ({ request }) => {
@@ -103,9 +114,12 @@ test('@claim:no-account and @claim:free-use host flow has no sign-in or payment 
   await expect(page.locator('a[href*="pay"], a[href*="checkout"], button:has-text("Buy")')).toHaveCount(0);
 });
 
-test('@claim:shared-score a companion joins, receives a cue, and returns a scored tap', async ({ browser }) => {
+test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap', async ({ browser }) => {
   const hostContext = await browser.newContext();
   const companionContext = await browser.newContext();
+  await companionContext.addInitScript(() => {
+    Object.defineProperty(navigator, 'vibrate', { configurable: true, value: undefined });
+  });
   const host = await hostContext.newPage();
   const companion = await companionContext.newPage();
   await host.goto('/host');
@@ -115,15 +129,44 @@ test('@claim:shared-score a companion joins, receives a cue, and returns a score
   await companion.goto(`/join/${code}`);
   await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
   await expect(host.getByRole('button', { name: 'Start 60-second round' })).toBeEnabled();
+  await host.locator('#bpm').fill('180');
   await host.getByRole('button', { name: 'Start 60-second round' }).click();
   await expect(companion.getByRole('button', { name: /Tap the beat/ })).toBeEnabled();
-  await companion.getByRole('button', { name: /Tap the beat/ }).click();
   await expect(companion.locator('#tap-pad')).toHaveClass(/cue/);
+  await expect(companion.locator('#tap-pad')).toHaveCSS('animation-name', 'cue');
+  await companion.getByRole('button', { name: /Tap the beat/ }).click();
   await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
   await expect(host.locator('#score-value')).toHaveAttribute('data-taps', '1');
   await expect(companion.locator('#score-value')).toHaveText(await host.locator('#score-value').textContent() ?? '0%');
   await hostContext.close();
   await companionContext.close();
+});
+
+test('service-worker-only offline reload keeps the built shell and manifest available', async ({ page, context }) => {
+  await page.goto('/demo');
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Network.clearBrowserCache');
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Try a tactile beat round');
+  await expect(page.getByRole('button', { name: 'Start sample round' })).toBeVisible();
+});
+
+test('unknown routes return an HTTP 404 and non-audio files are rejected', async ({ page }) => {
+  const missing = await page.goto('/definitely-not-a-real-route');
+  expect(missing?.status()).toBe(404);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('This beat has no room');
+
+  await page.goto('/host');
+  await expect(page.locator('#room-code')).not.toHaveText('······');
+  await page.locator('#audio-loop').setInputFiles({
+    name: 'not-audio.txt', mimeType: 'text/plain', buffer: Buffer.from('not audio'),
+  });
+  await expect(page.locator('#file-name')).toHaveText('Choose an audio file. This file was not loaded.');
 });
 
 test('real routes have one heading, useful titles, and no mobile overflow', async ({ page }, testInfo) => {
@@ -141,5 +184,24 @@ test('real routes have one heading, useful titles, and no mobile overflow', asyn
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     const resizedOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(resizedOverflow, `${route} overflow at 200% text size in ${testInfo.project.name}`).toBeLessThanOrEqual(1);
+  }
+});
+
+test('all visible interactive controls meet the 44px touch-target baseline', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'Touch targets are measured at the 390px mobile viewport.');
+  for (const route of ['/', '/demo', '/host', '/join', '/privacy', '/terms', '/404']) {
+    await page.goto(route);
+    const undersized = await page.locator('a, button, input').evaluateAll((elements) => elements
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { label: element.textContent?.trim() || element.getAttribute('aria-label') || element.id, width: rect.width, height: rect.height };
+      })
+      .filter((target) => target.width < 44 || target.height < 44));
+    expect(undersized, `${route} has undersized interactive controls`).toEqual([]);
   }
 });

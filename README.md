@@ -8,7 +8,7 @@ Live site: <https://haptic-beat-relay.sociobot.in>
 
 ## Try the sample
 
-Open <http://localhost:8080/demo> after starting the app. The sample room is already paired and has two realistic past scores. Choose **Start sample round** to see returned taps and the shared score. Demo state stays in page memory and is discarded on reset.
+Open <http://localhost:8080/demo> after starting the app. The sample room is already paired and has two realistic past scores. Choose **Start sample round** to see returned taps and the shared score over 12 seconds. Demo state stays in page memory and is discarded on reset.
 
 ## Run locally
 
@@ -47,7 +47,7 @@ It removes only the generated `frontend/dist` directory, runs the exact previous
 - A WebSocket relays beat, tap, presence, and score messages.
 - The host makes the audible click or plays a selected local loop.
 - The companion uses phone vibration or a connected gamepad when supported.
-- The screen cue remains available when haptics are unsupported.
+- The screen flashes each cue when vibration is unavailable.
 
 Rooms expire after two hours and disappear on server restart. The service has no database, user accounts, music catalog, tracking script, or payment code.
 

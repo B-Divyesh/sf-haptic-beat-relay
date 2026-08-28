@@ -28,7 +28,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .site-header, .site-footer, main { width: min(100% - 32px, 1200px); margin-inline: auto; }
 .site-header { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--night-800); }
 .site-header nav, .site-footer nav { display: flex; align-items: center; gap: 24px; }
-.site-header nav a { min-height: 44px; display: inline-flex; align-items: center; color: var(--fog-300); text-decoration: none; border-bottom: 2px solid transparent; }
+.site-header nav a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--fog-300); text-decoration: none; border-bottom: 2px solid transparent; }
 .site-header nav a:hover { color: var(--fog-100); border-color: var(--amber-400); }
 .wordmark { min-height: 44px; display: inline-flex; align-items: center; gap: 12px; color: var(--fog-100); font: 700 1rem/1 var(--display); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
 .wordmark-pulse { width: 34px; height: 18px; background: url('/favicon.svg') center / 34px no-repeat; }
@@ -92,6 +92,7 @@ p { max-width: 68ch; }
 
 .site-footer { display: grid; grid-template-columns: 1fr auto; gap: 16px 32px; padding: 40px 0 max(40px, env(safe-area-inset-bottom)); color: var(--fog-300); border-top: 1px solid var(--night-800); font-size: .85rem; }
 .site-footer p { margin: 0; }
+.site-footer nav a, .legal-main a:not(.button) { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; }
 .build-note { grid-column: 1 / -1; }
 
 .app-main { min-height: calc(100vh - 72px); padding-block: 64px 96px; }
@@ -140,8 +141,8 @@ input::file-selector-button { min-height: 36px; margin-right: 12px; padding: 4px
 
 .demo-banner { min-height: 48px; padding: 6px max(16px, calc((100% - 1200px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--night-950); background: var(--cyan-300); font-size: .86rem; }
 .demo-actions { display: flex; align-items: center; gap: 16px; }
-.demo-banner a, .demo-banner button { color: var(--night-950); font-weight: 750; }
-.text-button { min-height: 36px; padding: 4px; border: 0; background: transparent; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+.demo-banner a, .demo-banner button { min-height: 44px; display: inline-flex; align-items: center; color: var(--night-950); font-weight: 750; }
+.text-button { min-width: 44px; min-height: 44px; padding: 4px; border: 0; background: transparent; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
 .sample-label { color: var(--cyan-300); font-weight: 700; }
 .sample-list { margin: 0; }
 .sample-list div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--night-800); }
