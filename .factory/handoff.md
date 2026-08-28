@@ -75,13 +75,18 @@ cargo run --release
 ```
 
 The root Dockerfile remains the deployment artifact: multi-stage, non-root,
-and serves the frontend and Axum service on `PORT=8080`. Docker is not installed
-in this worker, so an image build could not be executed locally. Deployment and
-post-deploy health evidence are recorded after the repair commit is pushed.
+and serves the frontend and Axum service on `PORT=8080`. The repair commit
+`ffe1cd25ff6f88ab9d3e6bb6c3097a07108a263c` was pushed to `main`, built in Azure
+Container Registry as `sociobotregistry.azurecr.io/sf-haptic-beat-relay:ffe1cd25ff6f`
+(ACR run `chj1`, succeeded), and deployed to Container App revision
+`sf-haptic-beat-relay--0000002`. Live `https://haptic-beat-relay.sociobot.in/health`
+returned that full build SHA. Live `/demo` returned the manifest link and security
+headers; an unknown URL returned HTTP 404. Docker is not installed in this worker,
+so the equivalent local image smoke was not available.
 
 ## Known gaps
 
 - No Docker-compatible runtime is available in this worker for a local image
-  smoke test.
+  smoke test; the remote ACR Docker build and live health check passed.
 - No standalone Lighthouse executable is installed; the browser suite verifies
   the relevant accessibility, mobile, offline, and bundle-size gates.
