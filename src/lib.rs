@@ -1,0 +1,494 @@
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use axum::{
+    body::Body,
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
+    http::{header, HeaderValue, Request, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
+};
+use futures_util::{SinkExt, StreamExt};
+use rand::{distributions::Alphanumeric, Rng};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tokio::sync::{broadcast, Mutex};
+use tower_http::{
+    services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
+};
+
+pub const BUILD_SHA: &str = match option_env!("BUILD_SHA") {
+    Some(value) => value,
+    None => "dev",
+};
+
+const ROOM_TTL: Duration = Duration::from_secs(2 * 60 * 60);
+const RATE_WINDOW: Duration = Duration::from_secs(1);
+const RATE_BURST: u32 = 40;
+
+#[derive(Clone)]
+pub struct AppState {
+    rooms: Arc<Mutex<HashMap<String, Room>>>,
+    rates: Arc<Mutex<HashMap<String, RateEntry>>>,
+}
+
+struct Room {
+    host_token: String,
+    companion_token: Option<String>,
+    created_at: Instant,
+    channel: broadcast::Sender<String>,
+}
+
+struct RateEntry {
+    window_started: Instant,
+    count: u32,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            rooms: Arc::new(Mutex::new(HashMap::new())),
+            rates: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct RoomCreated {
+    code: String,
+    host_token: String,
+    expires_in_seconds: u64,
+}
+
+#[derive(Serialize)]
+struct RoomJoined {
+    companion_token: String,
+}
+
+#[derive(Deserialize)]
+struct SocketQuery {
+    role: String,
+    token: String,
+}
+
+pub fn app(dist_dir: impl Into<String>) -> Router {
+    let state = AppState::default();
+    let dist_dir = dist_dir.into();
+    let api = Router::new()
+        .route("/api/rooms", post(create_room))
+        .route("/api/rooms/{code}/join", post(join_room))
+        .route("/api/rooms/{code}/socket", get(room_socket))
+        .layer(middleware::from_fn_with_state(state.clone(), rate_limit));
+
+    Router::new()
+        .route("/health", get(health))
+        .merge(api)
+        .fallback_service(
+            ServeDir::new(&dist_dir)
+                .append_index_html_on_directories(true)
+                .fallback(ServeFile::new(format!("{dist_dir}/index.html"))),
+        )
+        .layer(middleware::from_fn(cache_headers))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(
+                "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+            ),
+        ))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
+
+async fn cache_headers(request: Request<Body>, next: Next) -> Response {
+    let path = request.uri().path().to_string();
+    let mut response = next.run(request).await;
+    let value = if path.starts_with("/assets/") {
+        "public, max-age=31536000, immutable"
+    } else if path.starts_with("/art/") || path.ends_with(".png") || path.ends_with(".svg") {
+        "public, max-age=86400"
+    } else {
+        "no-cache"
+    };
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static(value));
+    response
+}
+
+async fn health() -> Json<serde_json::Value> {
+    Json(json!({ "status": "ok", "build_sha": BUILD_SHA }))
+}
+
+async fn create_room(State(state): State<AppState>) -> Json<RoomCreated> {
+    let mut rooms = state.rooms.lock().await;
+    rooms.retain(|_, room| room.created_at.elapsed() < ROOM_TTL);
+
+    let code = loop {
+        let candidate = random_code(6);
+        if !rooms.contains_key(&candidate) {
+            break candidate;
+        }
+    };
+    let host_token = random_code(32);
+    let (channel, _) = broadcast::channel(128);
+    rooms.insert(
+        code.clone(),
+        Room {
+            host_token: host_token.clone(),
+            companion_token: None,
+            created_at: Instant::now(),
+            channel,
+        },
+    );
+
+    Json(RoomCreated {
+        code,
+        host_token,
+        expires_in_seconds: ROOM_TTL.as_secs(),
+    })
+}
+
+async fn join_room(
+    State(state): State<AppState>,
+    Path(raw_code): Path<String>,
+) -> Result<Json<RoomJoined>, ApiError> {
+    let code = normalized_code(&raw_code)?;
+    let mut rooms = state.rooms.lock().await;
+    let room = rooms.get_mut(&code).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            "room_not_found",
+            "That room is not open. Check the code with the host.",
+        )
+    })?;
+    if room.created_at.elapsed() >= ROOM_TTL {
+        rooms.remove(&code);
+        return Err(ApiError::new(
+            StatusCode::GONE,
+            "room_expired",
+            "That room expired. Ask the host to make a new room.",
+        ));
+    }
+    if room.companion_token.is_some() {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "room_full",
+            "That room already has a companion. Ask the host for a new room.",
+        ));
+    }
+    let token = random_code(32);
+    room.companion_token = Some(token.clone());
+    Ok(Json(RoomJoined {
+        companion_token: token,
+    }))
+}
+
+async fn room_socket(
+    State(state): State<AppState>,
+    Path(raw_code): Path<String>,
+    Query(query): Query<SocketQuery>,
+    ws: WebSocketUpgrade,
+) -> Result<Response, ApiError> {
+    let code = normalized_code(&raw_code)?;
+    let rooms = state.rooms.lock().await;
+    let room = rooms.get(&code).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            "room_not_found",
+            "That room is not open. Check the code with the host.",
+        )
+    })?;
+    let valid = match query.role.as_str() {
+        "host" => constant_time_eq(&query.token, &room.host_token),
+        "companion" => room
+            .companion_token
+            .as_ref()
+            .is_some_and(|token| constant_time_eq(&query.token, token)),
+        _ => false,
+    };
+    if !valid {
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "invalid_token",
+            "This room link is not valid. Join again with the room code.",
+        ));
+    }
+    let channel = room.channel.clone();
+    let role = query.role;
+    let token = query.token;
+    drop(rooms);
+
+    Ok(ws
+        .on_upgrade(move |socket| socket_session(socket, channel, role, token, code, state))
+        .into_response())
+}
+
+async fn socket_session(
+    socket: WebSocket,
+    channel: broadcast::Sender<String>,
+    role: String,
+    token: String,
+    code: String,
+    state: AppState,
+) {
+    let (mut socket_tx, mut socket_rx) = socket.split();
+    let mut room_rx = channel.subscribe();
+    let joined = json!({ "type": "presence", "role": role, "connected": true }).to_string();
+    let _ = channel.send(joined);
+
+    loop {
+        tokio::select! {
+            incoming = socket_rx.next() => {
+                match incoming {
+                    Some(Ok(Message::Text(text))) if text.len() <= 2048 => {
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if allowed_room_message(&role, &value) {
+                                let _ = channel.send(text.to_string());
+                            }
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+            outgoing = room_rx.recv() => {
+                match outgoing {
+                    Ok(text) => {
+                        if socket_tx.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+    if role == "companion" {
+        let mut rooms = state.rooms.lock().await;
+        if let Some(room) = rooms.get_mut(&code) {
+            if room
+                .companion_token
+                .as_ref()
+                .is_some_and(|current| constant_time_eq(current, &token))
+            {
+                room.companion_token = None;
+            }
+        }
+    }
+    let left = json!({ "type": "presence", "role": role, "connected": false }).to_string();
+    let _ = channel.send(left);
+}
+
+fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
+    let Some(kind) = value.get("type").and_then(|item| item.as_str()) else {
+        return false;
+    };
+    match (role, kind) {
+        ("companion", "tap") => value.get("at").and_then(|item| item.as_i64()).is_some(),
+        ("host", "beat") => value.get("at").and_then(|item| item.as_i64()).is_some(),
+        ("host", "round_start") => {
+            value
+                .get("bpm")
+                .and_then(|item| item.as_u64())
+                .is_some_and(|bpm| (40..=240).contains(&bpm))
+                && value
+                    .get("duration")
+                    .and_then(|item| item.as_u64())
+                    .is_some_and(|seconds| (1..=3600).contains(&seconds))
+        }
+        ("host", "score") | ("host", "round_end") => value
+            .get("score")
+            .and_then(|item| item.as_u64())
+            .is_some_and(|score| score <= 100),
+        _ => false,
+    }
+}
+
+async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next: Next) -> Response {
+    let client = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(',').next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("direct")
+        .to_string();
+
+    let mut rates = state.rates.lock().await;
+    let entry = rates.entry(client).or_insert(RateEntry {
+        window_started: Instant::now(),
+        count: 0,
+    });
+    if entry.window_started.elapsed() >= RATE_WINDOW {
+        entry.window_started = Instant::now();
+        entry.count = 0;
+    }
+    entry.count += 1;
+    if entry.count > RATE_BURST {
+        drop(rates);
+        let mut response = ApiError::new(
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate_limited",
+            "Too many requests arrived at once. Wait one second and try again.",
+        )
+        .into_response();
+        response
+            .headers_mut()
+            .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+        return response;
+    }
+    drop(rates);
+    next.run(request).await
+}
+
+fn normalized_code(value: &str) -> Result<String, ApiError> {
+    let code: String = value
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .map(|character| character.to_ascii_uppercase())
+        .collect();
+    if code.len() == 6 {
+        Ok(code)
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_code",
+            "A room code has six letters and numbers. Check the code and try again.",
+        ))
+    }
+}
+
+fn random_code(length: usize) -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .filter(|byte| !matches!(byte, b'0' | b'O' | b'1' | b'I' | b'l'))
+        .take(length)
+        .map(char::from)
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
+
+fn constant_time_eq(left: &str, right: &str) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    left.bytes()
+        .zip(right.bytes())
+        .fold(0_u8, |difference, (a, b)| difference | (a ^ b))
+        == 0
+}
+
+struct ApiError {
+    status: StatusCode,
+    code: &'static str,
+    message: &'static str,
+}
+
+impl ApiError {
+    fn new(status: StatusCode, code: &'static str, message: &'static str) -> Self {
+        Self {
+            status,
+            code,
+            message,
+        }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        (
+            self.status,
+            Json(json!({ "error": self.code, "message": self.message })),
+        )
+            .into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn creates_and_joins_a_room() {
+        let application = app("frontend/dist");
+        let create = application
+            .clone()
+            .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(create.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(create.into_body(), 4096)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let code = created["code"].as_str().unwrap();
+
+        let join = application
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/join"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(join.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn rate_limit_uses_forwarded_client_ip() {
+        let application = app("frontend/dist");
+        let mut last = StatusCode::OK;
+        for _ in 0..41 {
+            last = application
+                .clone()
+                .oneshot(
+                    Request::post("/api/rooms")
+                        .header("x-forwarded-for", "203.0.113.8")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status();
+        }
+        assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[test]
+    fn validates_messages_by_room_role() {
+        assert!(allowed_room_message(
+            "companion",
+            &json!({ "type": "tap", "at": 1000 })
+        ));
+        assert!(!allowed_room_message(
+            "companion",
+            &json!({ "type": "round_start", "bpm": 104, "duration": 60 })
+        ));
+        assert!(!allowed_room_message(
+            "host",
+            &json!({ "type": "round_start", "bpm": 900, "duration": 60 })
+        ));
+    }
+}
