@@ -1,0 +1,11 @@
+{
+  "slug": "haptic-beat-relay",
+  "title": "Haptic Beat Relay",
+  "summary": "Send tactile beat cues to a friend's phone and score the taps they send back.",
+  "artifact_class": "web-with-backend",
+  "user": "Friends and rhythm-game makers who want a simple local cue relay without an online account.",
+  "smallest_useful_product": "A host loads a local beat loop; a second device joins with a six-character code, receives vibration cues, taps back on-beat, and sees a shared accuracy meter.",
+  "monetization": "free",
+  "constraints": "Web vibration and controller haptics depend on browser and device support. Relay only ephemeral room state. Include no copyrighted music."
+}
+
