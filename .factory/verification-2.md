@@ -80,7 +80,7 @@ Result: HTTP 200 with an empty `#app`. The worker returns cached `/` HTML for mi
 - “Refused to apply style … MIME type (`text/html`)”; and
 - “Failed to load module script … MIME type `text/html`.”
 
-A normal offline reload can appear to pass while the browser's ordinary HTTP cache still contains the assets, which explains the earlier deployment-only report. The forced service-worker update itself passed: it activated and removed a seeded stale cache. The page also omits `<link rel="manifest">`, so the shipped manifest is not discoverable.
+A normal offline reload can appear to pass while the browser's ordinary HTTP cache still contains the assets, which can mask this defect in a lighter smoke test. The forced service-worker update itself passed: it activated and removed a seeded stale cache. The page also omits `<link rel="manifest">`, so the shipped manifest is not discoverable.
 
 Required repair: include the hashed build shell in a versioned precache (or generate a build manifest), return an offline response appropriate to the request type, link the web manifest, and test after clearing HTTP cache.
 
