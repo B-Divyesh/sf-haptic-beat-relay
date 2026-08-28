@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Sitemap: https://haptic-beat-relay.sociobot.in/sitemap.xml
+

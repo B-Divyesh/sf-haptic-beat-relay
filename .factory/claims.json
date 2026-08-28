@@ -1,0 +1,72 @@
+[
+  {
+    "id": "demo-sandbox",
+    "claim": "Try a paired sample round without setup or saved data.",
+    "where": "landing primary action, demo banner, README",
+    "test": "npm run test:browser -- --grep @claim:demo-sandbox",
+    "sandbox": "fresh browser context at /demo; start the seeded round and reset it"
+  },
+  {
+    "id": "local-audio",
+    "claim": "The audio loop stays on the host device.",
+    "where": "landing facts, host file picker, privacy, README",
+    "test": "npm run test:browser -- --grep @claim:local-audio",
+    "sandbox": "fresh browser context; load a marked audio fixture and assert its bytes are never sent"
+  },
+  {
+    "id": "no-third-party",
+    "claim": "There are no advertising trackers or third-party runtime requests.",
+    "where": "privacy, README",
+    "test": "npm run test:browser -- --grep @claim:no-third-party",
+    "sandbox": "fresh browser context; capture every request while loading a local audio fixture and assert every origin is the product origin"
+  },
+  {
+    "id": "no-account",
+    "claim": "No account is needed.",
+    "where": "landing, privacy, README",
+    "test": "npm run test:browser -- --grep @claim:no-account",
+    "sandbox": "fresh browser context; create a working room without a sign-in step"
+  },
+  {
+    "id": "free-use",
+    "claim": "Haptic Beat Relay is free to use.",
+    "where": "landing facts, terms, README",
+    "test": "npm run test:browser -- --grep @claim:free-use",
+    "sandbox": "fresh browser context; create a room and assert no purchase or payment gate appears"
+  },
+  {
+    "id": "shared-score",
+    "claim": "A companion receives each cue, taps back, and builds a shared accuracy score.",
+    "where": "landing preview and steps, live room, README",
+    "test": "npm run test:browser -- --grep @claim:shared-score",
+    "sandbox": "two fresh browser contexts; create and join one room, start a round, receive a cue, return a tap, and see the same scored result"
+  },
+  {
+    "id": "ephemeral-rooms",
+    "claim": "Room state stays in memory for up to two hours and disappears on restart.",
+    "where": "landing limits, privacy, README",
+    "test": "npm run test:browser -- --grep @claim:ephemeral-rooms",
+    "sandbox": "fresh request context; create a room and assert the API reports a 7200-second in-memory lifetime"
+  },
+  {
+    "id": "rate-limit",
+    "claim": "Room API bursts are limited and return Retry-After.",
+    "where": "README",
+    "test": "npm run test:browser -- --grep @claim:rate-limit",
+    "sandbox": "fresh request identity; send a 45-request burst and assert 429 with Retry-After"
+  },
+  {
+    "id": "health",
+    "claim": "The health endpoint reports the build SHA.",
+    "where": "README",
+    "test": "npm run test:browser -- --grep @claim:health",
+    "sandbox": "fresh request context; request /health and assert status plus a build_sha value"
+  },
+  {
+    "id": "connection-required",
+    "claim": "The real relay needs a connection.",
+    "where": "landing facts",
+    "test": "npm run test:browser -- --grep @claim:connection-required",
+    "sandbox": "fresh browser context; go offline before creating a real room and assert the recovery message appears"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "name": "Haptic Beat Relay",
+  "short_name": "Beat Relay",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071019",
+  "theme_color": "#071019",
+  "icons": [{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
+}
+

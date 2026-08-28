@@ -1,0 +1,21 @@
+{
+  "name": "haptic-beat-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config frontend/vite.config.ts",
+    "build": "tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts",
+    "start": "cargo run --release",
+    "test:unit": "vitest run --config frontend/vitest.config.ts",
+    "test:browser": "playwright test",
+    "test": "npm run build && npm run test:unit && cargo test && npm run test:browser"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@playwright/test": "1.58.2",
+    "typescript": "5.9.2",
+    "vite": "7.3.6",
+    "vitest": "3.2.7"
+  }
+}
