@@ -41,6 +41,7 @@ const RATE_BURST: u32 = 40;
 pub struct AppState {
     rooms: Arc<Mutex<HashMap<String, Room>>>,
     rates: Arc<Mutex<HashMap<String, RateEntry>>>,
+    global_rate: Arc<Mutex<RateEntry>>,
     room_ttl: Duration,
 }
 
@@ -61,6 +62,10 @@ impl Default for AppState {
         Self {
             rooms: Arc::new(Mutex::new(HashMap::new())),
             rates: Arc::new(Mutex::new(HashMap::new())),
+            global_rate: Arc::new(Mutex::new(RateEntry {
+                window_started: Instant::now(),
+                count: 0,
+            })),
             room_ttl: ROOM_TTL,
         }
     }
@@ -427,18 +432,17 @@ async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next:
         .unwrap_or("direct")
         .to_string();
 
+    let mut global_rate = state.global_rate.lock().await;
     let mut rates = state.rates.lock().await;
     let entry = rates.entry(client).or_insert(RateEntry {
         window_started: Instant::now(),
         count: 0,
     });
-    if entry.window_started.elapsed() >= RATE_WINDOW {
-        entry.window_started = Instant::now();
-        entry.count = 0;
-    }
-    entry.count += 1;
-    if entry.count > RATE_BURST {
+    let client_limited = consume_rate_slot(entry);
+    let global_limited = consume_rate_slot(&mut global_rate);
+    if client_limited || global_limited {
         drop(rates);
+        drop(global_rate);
         let mut response = ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limited",
@@ -452,6 +456,15 @@ async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next:
     }
     drop(rates);
     next.run(request).await
+}
+
+fn consume_rate_slot(entry: &mut RateEntry) -> bool {
+    if entry.window_started.elapsed() >= RATE_WINDOW {
+        entry.window_started = Instant::now();
+        entry.count = 0;
+    }
+    entry.count += 1;
+    entry.count > RATE_BURST
 }
 
 // Azure ingress can provide the first X-Forwarded-For hop as `IP:port`.
@@ -652,6 +665,26 @@ mod tests {
                 .oneshot(
                     Request::post("/api/rooms")
                         .header("x-forwarded-for", format!("203.0.113.9:{port}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status();
+        }
+        assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn rate_limit_has_a_global_burst_guard_when_ingress_changes_forwarded_clients() {
+        let application = app("frontend/dist");
+        let mut last = StatusCode::OK;
+        for octet in 1..42 {
+            last = application
+                .clone()
+                .oneshot(
+                    Request::post("/api/rooms")
+                        .header("x-forwarded-for", format!("203.0.113.{octet}"))
                         .body(Body::empty())
                         .unwrap(),
                 )
