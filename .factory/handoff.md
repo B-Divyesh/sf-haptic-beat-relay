@@ -1,97 +1,53 @@
-# Haptic Beat Relay — repair 17 handoff
+# Haptic Beat Relay — verification 18 handoff
 
-## Released candidate
+## Result: FAIL
 
-- **Repair base:** `b6e326aa4d4289f8f4f2d6b3db2f601a6dc31ff1`
-- **Deployed artifact commit:** `42222a679e91d36af9fb854fccdb0036a925a6db`
-- **Live URL:** <https://haptic-beat-relay.sociobot.in>
-- **Prior independent report:** [verification-17.md](verification-17.md)
-- **Released and live-verified:** 2026-08-29 21:05 UTC
+- **Work order:** `haptic-beat-relay-verify-18`
+- **Tested commit:** `1745df706a38c6404d236768e9b0ab2d3d780dd7`
+- **Tested URL:** <https://haptic-beat-relay.sociobot.in>
+- **Verified:** 2026-08-29 UTC
+- **Full evidence:** [verification-18.md](verification-18.md)
 
-## What changed
+The candidate is **not releasable**. The cold first-read and one-click sample
+demo pass, all local tests/build/lint checks pass, and the live frontend and
+health identity match the candidate. Three mandatory live claims fail.
 
-The independent verifier’s release blocker was reproduced against the existing
-deployment before this repair. `RELAY_EXPECTED_SHA=f81c8daf05f9f1c4fc485cc7a80742df77dbf47f npm run test:live-topology`
-failed at the required HTTP-ingress check with `actual: 'auto'` and
-`expected: 'http'`. Azure also reported the unsafe `minReplicas: 1`,
-`maxReplicas: 3` range and generic short-tag revision documented in the report.
+## Release blockers
 
-The repair makes the singleton boundary executable and testable:
+1. **Critical — core live pairing fails.** Azure has `Auto` ingress,
+   min/max `1/3`, and three ready replicas. Room and WebSocket state is
+   process-local. The listed 30-round relay claim failed on its first join; a
+   separate fresh sample returned `404 room_not_found` for 30/30 immediate
+   create→join attempts. A live host page also logged a WebSocket 404.
+2. **High — per-client rate limiting is split.** The listed live claim
+   accepted 45/45 requests rather than 40 and five 429s. A separate
+   125-request burst accepted 80 before limiting 45; those 429s did include
+   `Retry-After: 1`. The required allowance is 40.
+3. **High — deployment topology/provenance is wrong.** The singleton claim
+   found transport `Auto`, expected `Http`. The active revision is
+   `sf-haptic-beat-relay--0000025` with short image tag
+   `sociobotregistry.azurecr.io/sf-haptic-beat-relay:1745df706a38`, not the
+   guarded full-SHA image and SHA-derived revision suffix.
 
-- `deploy/containerapp.json` records the only supported topology: Single
-  revision mode, HTTP ingress, min/max one, and deliberately ephemeral
-  process-local room, WebSocket, and rate-limit state. This preserves the
-  researched brief: rooms expire after two hours and a restart clears them.
-- `scripts/deploy-containerapp.sh` now waits for and requires exactly one
-  active, running **and ready** replica, after applying single revision mode,
-  the full candidate SHA image tag, SHA-derived revision suffix, min/max one,
-  and HTTP ingress. It still refuses a dirty, unpushed candidate or a handoff
-  from an earlier commit, then runs the topology, 30-round relay, and five
-  fresh-client allowance gates.
-- `scripts/verify-live-topology.mjs` independently asserts the ready container
-  state in addition to active revision, traffic, ingress, scale, immutable full
-  SHA image identity, revision suffix, and `/health` identity.
-- The deploy harness now rejects both the verifier’s `Auto`/`1–3`/three-ready
-  replica drift and a running-but-unready container before it can run a success
-  gate.
-- Rust regressions reproduce the exact process-local failure: a room created
-  by one relay returns `404 room_not_found` on an immediate join routed to
-  another; a 45-request burst spread over three relays admits all 45. The
-  existing one-process regression proves the documented 40 successes then five
-  `429` responses with `Retry-After: 1`.
+## What passed
 
-## Verification completed before release
+- `npm ci`, every local claim, `npm test`, the exact production build, Rust
+  formatting, strict Clippy, locked release build, and a runtime started with
+  only `PORT`.
+- Local end-to-end rounds at 60 and 180 BPM, invalid/recovery cases, local
+  concurrency, exact local 40/5 limiting, and restart/TTL behavior.
+- Desktop and 390 px layout, keyboard-only operation, visible focus, 200% text,
+  reduced motion, and zero serious/critical Axe findings.
+- Demo and audio privacy request capture, response headers and caching,
+  service-worker update/offline demo reload, internal link crawl, and candidate
+  JS/CSS byte matching.
+- Lighthouse mobile: 100 performance, accessibility, best practices, and SEO;
+  LCP 1.5 s, TBT 0 ms, CLS 0. JS is 23.16 KB raw / 7.86 KB gzip.
 
-All commands below passed from this repair tree.
+## Required next step
 
-| Check | Evidence |
-|---|---|
-| Clean install | `npm ci` installed 59 packages and reported 0 vulnerabilities. |
-| Unit, integration, browser, desktop/mobile | `npm test` passed: 3 Vitest tests, deployment/release contracts, 10 Rust tests, clean-browser entry-point check, and 38 Playwright checks at desktop and 390 px (the duplicate mobile 60-second timing case is intentionally skipped). |
-| Regression reproduction | `cargo test` passed the exact separate-relay create→join `404` and three-relay 45/45 allowance reproductions. |
-| Build/type checks | `npm run build` passed. Output: JS 23,164 bytes raw / 7.84 kB gzip; CSS 15,590 bytes raw / 4.21 kB gzip. |
-| Rust quality/release | `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, and `BUILD_SHA=repair-local cargo build --release --locked` passed. |
-| Runtime contract | With only `PORT=18080`, the release binary returned `{"build_sha":"repair-local","status":"ok"}` and logged `PORT supplied; no secrets required`. |
-| Accessibility, keyboard, privacy, offline/update, response policy | The full Playwright suite covers Axe, skip-link and route-focus keyboard operation, labels/errors, desktop and 390 px overflow/touch checks, reduced motion, same-origin/no-audio-upload privacy capture, service-worker offline reload, headers/cache/CSP, and real 404 behavior. No serious or critical Axe violation was reported. |
-| Container/package | This is a web-with-backend, not a consumer package. Docker is not installed in this worker, so image execution cannot be run locally; the multi-stage Docker/release contract test and its frontend and locked Rust builds passed. |
-
-One direct live allowance check during reproduction,
-`RELAY_RATE_REPETITIONS=1 RELAY_TEST_CLIENT=198.51.100.207 npm run test:live-rate-limit`,
-returned the expected 40/5 while only one replica happened to be active. That
-does not clear the blocker: verification 17 captured 45/45 after scale-out,
-which is why the deployment guard now rejects the unsafe scale range and every
-release runs five fresh-client bursts.
-
-## Deployment and final live evidence
-
-`npm run deploy` built and rolled out the full immutable ACR tag for
-`42222a679e91d36af9fb854fccdb0036a925a6db`. The guarded command completed its
-own topology, 30-round relay, and five-client allowance gates. The three gates
-were then rerun independently with these exact results:
-
-```json
-{
-  "revision": "sf-haptic-beat-relay--r42222a679e",
-  "activeRevisions": 1,
-  "minReplicas": 1,
-  "maxReplicas": 1,
-  "runningReplicas": 1,
-  "readyReplicas": 1,
-  "transport": "Http",
-  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:42222a679e91d36af9fb854fccdb0036a925a6db",
-  "buildSha": "42222a679e91d36af9fb854fccdb0036a925a6db"
-}
-```
-
-`RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit` passed for five fresh
-forwarded clients. Each result was exactly `accepted: 40`, `limited: 5`, and
-`retryAfter: "1"`. `RELAY_ROUNDS=30 npm run test:live-relay` passed:
-
-```text
-live relay regression passed: 30/30 fresh API create→join checks and 30/30 fresh desktop-host + 390px-companion WebSocket rounds at https://haptic-beat-relay.sociobot.in
-```
-
-There are no known product gaps. Do not scale this implementation beyond one
-replica or add durable room storage without changing the explicit
-ephemeral-room privacy/expiry contract and moving all relay and rate-limit
-state together.
+Redeploy the final committed SHA through the repository's guarded path so
+Azure reports HTTP ingress, min/max one, one ready replica, a full-SHA image
+tag, and the SHA-derived revision suffix. Then rerun every claim. Do not scale
+this process-local implementation beyond one replica unless room, WebSocket,
+and rate-limit state are moved to shared infrastructure.
