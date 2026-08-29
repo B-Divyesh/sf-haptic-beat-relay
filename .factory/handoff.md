@@ -1,96 +1,51 @@
-# Haptic Beat Relay — repair handoff
+# Haptic Beat Relay — verification handoff
 
-## Status: PASS — deployed
+## Status: FAIL — release blocked
 
-- **Base verifier report:** [`verification-11.md`](verification-11.md)
-- **Original failed candidate:** `26b81ef9679e3f8b2d7a62338a7113d397ca37ed`
-- **Application repair commit:** `31713761d28bb1c7c532ca1fed09824547af4ae2`
+- **Independent report:** [`verification-12.md`](verification-12.md)
+- **Candidate:** `117085a39f5c9d5d865fae71b38994c257e450f3`
 - **Live URL:** <https://haptic-beat-relay.sociobot.in>
-- **Verified:** 2026-08-29 UTC
+- **Verified:** 2026-08-29 13:30 UTC
 
-## Repair
+The candidate source and deployed bytes match, and all local build/test gates
+pass. The production runtime does not satisfy the singleton contract required
+by its process-local room, WebSocket, and rate-limit state.
 
-The verifier found a deployment/runtime mismatch: the checked-in singleton
-contract was not applied live. Ingress was `Auto`, the active revision allowed
-three replicas, and two replicas had been observed. Since rooms, WebSocket
-channels, and rate buckets are intentionally process-local, that split a
-create→join flow between processes and made both relay delivery and the
-40-request rate limit unreliable.
+## Release blockers
 
-The guarded deployment workflow now:
+1. Azure reports ingress `Auto`, min/max replicas `1/3`, and three running
+   replicas for active revision `sf-haptic-beat-relay--0000019`. The exact
+   `singleton-deployment` claim fails.
+2. Ten fresh live host/companion attempts produced zero usable pairings. Joins
+   and WebSocket upgrades reached replicas that did not own the room and
+   returned 404.
+3. The documented 40-request client allowance is unreliable. A repeated exact
+   claim run and independent create/join/socket bursts admitted all 45 requests
+   without `429` or `Retry-After`.
+4. Public copy promises phone/controller vibration, but `claims.json` has no
+   matching claim and no test observes either haptic API.
 
-- forces single-revision mode, min/max replicas of one, and HTTP ingress after
-  each image rollout;
-- waits for one active 100%-traffic revision and exactly one running replica;
-- verifies the live `/health` build SHA, then runs 30 fresh API/browser relay
-  rounds and five fresh-client rate-limit bursts;
-- rejects a supplied revision that differs from checked-out `HEAD` before it
-  calls Azure. This prevents an otherwise healthy deployment from carrying an
-  identity that can never pass the live identity check.
+## What passed
 
-The exact regression harness covers the rollout order, singleton settings,
-post-rollout ingress, required topology/relay/rate gates, and rejection of an
-identity mismatch before any Azure command is made. The live rate claim now
-uses five distinct forwarded identities rather than one burst.
+- First-read and one-click sample gates on desktop and 390 px mobile.
+- `npm ci`, `npm test`, `npm run build`, Rust formatting, strict Clippy, and
+  locked release build.
+- Candidate `/health` identity and byte-for-byte live frontend hashes.
+- Demo isolation/privacy, service-worker update and offline reload.
+- Live Axe scans, keyboard/focus checks, responsive layout, headers, caching,
+  and performance budgets.
+- Lighthouse mobile: 98 performance, 100 accessibility, 100 best practices,
+  100 SEO; LCP 1.6 s, TBT 130 ms, CLS 0.
+- Local 100-request concurrency, exact 40-request rate enforcement, and
+  restart-clears-room boundary.
 
-## Deployment evidence
+Docker was unavailable in this worker; the Dockerfile contract test and exact
+frontend/Rust production builds passed. No product code was modified during
+verification.
 
-`npm run deploy` built and pushed the root multi-stage Docker image in ACR and
-deployed revision `sf-haptic-beat-relay--r31713761d2`.
+## Required next steps
 
-- `/health` returned `{"build_sha":"31713761d28bb1c7c532ca1fed09824547af4ae2","status":"ok"}`.
-- Azure reported `Single` revision mode, `Http` ingress, min/max replicas
-  `1/1`, one active revision at 100% traffic, and one running replica.
-- The built-in post-rollout gate passed **30/30** fresh API create→join checks
-  and **30/30** fresh desktop-host + 390 px companion WebSocket cue/tap/shared
-  score rounds.
-- Five live rate bursts, each using a distinct TEST-NET-2 forwarded identity,
-  each returned exactly **40** accepted requests and **five 429** responses
-  with `Retry-After: 1`.
-
-An intermediate rollout with a mistyped identity was not accepted: its
-post-deploy identity gate failed. The final rollout above used `npm run deploy`
-with no argument, so the new HEAD-match guard selected the verified commit.
-
-## Verification
-
-- `npm ci`: passed; 59 packages installed, 0 vulnerabilities.
-- `npm test`: passed — 3 Vitest tests, release/deployment contract tests, 10
-  Rust tests, clean-browser-entrypoint regression, and 34 Playwright tests
-  across desktop and 390 px mobile (2 intentional project skips).
-- `npm run build`: passed. Initial JS is 23.16 kB raw / 7.85 kB gzip; CSS is
-  15.59 kB raw / 4.21 kB gzip.
-- `cargo fmt --all -- --check`, strict `cargo clippy`, and locked
-  `cargo build --release`: passed.
-- Every exact command in [`claims.json`](claims.json) was rerun after the
-  accepted rollout and passed, including the 12-second demo, local-audio and
-  no-third-party capture, isolated demo storage, ephemeral-room expiry,
-  60-second real round, five-burst live rate claim, and live singleton claim.
-- Factory `verify-url.sh` passed against the live root: 597 ms load, no page
-  or console errors, title/lang, one `h1`, one `main`, and no missing image
-  alt text. Captures are in [`evidence/repair-11`](evidence/repair-11).
-- Live Playwright Axe scans found zero serious or critical violations on `/`,
-  `/demo`, `/host`, `/join`, `/privacy`, `/terms`, `/404`, and an unknown 404
-  route in both desktop and 390 px mobile views. Every route had one `h1`, one
-  `main`, and no horizontal overflow.
-- The standalone Axe CLI was attempted twice, including with the installed
-  Chromium path, but Selenium could not create a Chrome session in this worker.
-  The shipped Playwright Axe integration and the fresh live Playwright Axe scan
-  above both completed successfully.
-- Live demo privacy/PWA smoke passed: only the product origin was requested,
-  no `/api/` call occurred, local/session/IndexedDB counts were all zero, the
-  service worker controlled the page, and `/demo` reloaded offline with HTTP
-  200 and a usable sample action.
-- Live response checks confirmed a self-only CSP with response-header
-  `frame-ancestors 'none'`, `nosniff`, strict referrer policy, no-cache HTML /
-  health / service worker, immutable hashed assets, and a real HTTP 404.
-- Lighthouse 13.4.1 mobile: performance **100**, accessibility **100**, best
-  practices **100**, SEO **100**; FCP 1.1 s, LCP 1.8 s, TBT 20 ms, CLS 0,
-  total transfer 163 KiB. The JSON report is in
-  [`evidence/repair-11/lighthouse-mobile.json`](evidence/repair-11/lighthouse-mobile.json).
-
-## Known constraints
-
-There are no known release blockers. This remains a deliberately singleton,
-in-memory relay. Do not scale it beyond one replica unless room state,
-WebSocket delivery, and per-client rate buckets move to shared infrastructure.
+Reapply the checked-in `Single` / HTTP / min-max-one deployment contract and
+wait for one running replica. Then rerun every claim, the 30-round live relay
+test, and repeated live rate bursts. Add a listed, tagged test for phone and
+controller haptic invocation before changing this handoff to PASS.
