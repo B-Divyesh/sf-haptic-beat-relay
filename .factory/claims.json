@@ -59,8 +59,8 @@
     "id": "rate-limit",
     "claim": "Each client may make exactly 40 room API requests per second; later requests return 429 with Retry-After.",
     "where": "README",
-    "test": "npm run test:browser -- --grep @claim:rate-limit",
-    "sandbox": "fresh request identity; send a 45-request burst and assert 429 with Retry-After"
+    "test": "npm run test:live-rate-limit",
+    "sandbox": "fresh forwarded client identity; send a 45-request live burst and assert exactly 40 successes, then five 429 responses with Retry-After: 1"
   },
   {
     "id": "health",

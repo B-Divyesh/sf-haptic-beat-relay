@@ -55,11 +55,14 @@ WebSocket handshake, or browser error:
 ```sh
 npm run test:live-relay
 npm run test:live-topology
+npm run test:live-rate-limit
 ```
 
 The topology check uses read-only Azure queries. It verifies one active
 revision, one configured and running replica, HTTP ingress, and a live build
-SHA matching the checked-out commit.
+SHA matching the checked-out commit. The live rate-limit check sends one fresh
+45-request room burst and requires exactly 40 successes followed by five
+`429` responses with `Retry-After: 1`.
 
 ## How it works
 

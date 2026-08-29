@@ -734,6 +734,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn regression_p0_two_process_limiters_reproduce_the_incorrect_80_request_allowance() {
+        // This is the second half of the live failure from verification 8.
+        // Two independent replicas each own a fresh in-memory counter, so one
+        // forwarded client is incorrectly admitted 80 times when requests are
+        // load-balanced between them. Production is protected by the asserted
+        // one-replica Container App topology; keep this test so that boundary
+        // remains explicit until the state moves to shared infrastructure.
+        let first_process = app("frontend/dist");
+        let second_process = app("frontend/dist");
+        let mut statuses = Vec::new();
+        let mut retry_after = Vec::new();
+
+        for request_number in 0..90 {
+            let application = if request_number % 2 == 0 {
+                first_process.clone()
+            } else {
+                second_process.clone()
+            };
+            let response = application
+                .oneshot(
+                    Request::post("/api/rooms")
+                        .header("x-forwarded-for", "198.51.100.80")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            statuses.push(response.status());
+            retry_after.push(response.headers().get(header::RETRY_AFTER).cloned());
+        }
+
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|&&status| status == StatusCode::OK)
+                .count(),
+            80,
+            "two process-local limiters reproduce the unsafe doubled allowance"
+        );
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|&&status| status == StatusCode::TOO_MANY_REQUESTS)
+                .count(),
+            10
+        );
+        assert!(retry_after
+            .iter()
+            .zip(statuses)
+            .filter(|(_, status)| *status == StatusCode::TOO_MANY_REQUESTS)
+            .all(|(value, _)| value == &Some(HeaderValue::from_static("1"))));
+    }
+
+    #[tokio::test]
     // @claim:ephemeral-rooms
     async fn claim_ephemeral_rooms_evict_after_the_configured_ttl_and_on_restart() {
         assert_eq!(ROOM_TTL, Duration::from_secs(7_200));
