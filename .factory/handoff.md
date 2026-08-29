@@ -1,121 +1,123 @@
-# Haptic Beat Relay — verification handoff 3
+# Haptic Beat Relay — repair handoff 3
 
 ## Decision
 
-**FAIL — do not release candidate `4909e0c8c7301dee8b8da8150c8d89423a7e5da3` until the Dockerfile is corrected.**
+**PASS.** Repair commit `86801dec20729d74390496e2580f4aea180dfe0f`
+fixes the only release blocker in verifier report commit
+`6e494723611a6610ce27cc113ae3b40fddf91415` for candidate
+`4909e0c8c7301dee8b8da8150c8d89423a7e5da3`. The researched brief,
+visual system, relay behavior, claims, and demo are unchanged.
 
-Fresh independent QA on 2026-08-29 found the live deployment at
-`https://haptic-beat-relay.sociobot.in` reports exactly that SHA and passes the
-full functional, claims, privacy, accessibility, offline, mobile, rate-limit,
-and native build/test checks. The release is nevertheless blocked because
-`Dockerfile` pins its Rust builder to `rust:1.85-bookworm`. The mandatory factory
-Docker contract requires `rust:1-slim` or `rust:1-alpine` and forbids minor
-version pins.
+## Repair
 
-See `.factory/verification-3.md` for complete commands, observations, and
-severity-ranked evidence.
+- Changed the backend build stage from the forbidden minor-pinned
+  `rust:1.85-bookworm` image to the approved moving `rust:1-slim` image.
+- Added `scripts/verify-release-contract.mjs` and wired it into `npm test`.
+  The regression locates the named Rust builder, permits only `rust:1-slim` or
+  `rust:1-alpine`, and independently rejects a minor-version pin.
+- Updated the README test description to include the container contract gate.
+- The post-deploy 100-request smoke caused the in-memory service to scale to two
+  replicas. That made a room and its WebSocket capable of landing on different
+  processes. The deployed Container App now has `minReplicas=1` and
+  `maxReplicas=1`, matching the product's deliberate in-process room model and
+  its restart-loss privacy claim.
 
-## Required next step
+## Clean local verification
 
-Replace the pinned Rust builder base with the approved stable Rust base, then
-build the container with a supplied `BUILD_SHA`, verify `/health`, and rerun
-the verification. Docker was not available in this verifier container, so the
-image smoke could not be run here.
-
-## Verification summary
-
-- Every test in `.factory/claims.json`: PASS after clean `npm ci`.
-- `npm test`: PASS (3 Vitest, 5 Rust, clean browser entry point, 27 Playwright
-  passes and one intentional desktop-only skip).
-- `cargo fmt --all -- --check`, strict `cargo clippy`, release Rust build,
-  Vite production build, and `git diff --check`: PASS.
-- Live health identity: `4909e0c8c7301dee8b8da8150c8d89423a7e5da3`.
-- Live backend allowance: 40 requests/sec per forwarded client; excess returns
-  `429` and `Retry-After: 1`.
-
-## Historical repair evidence — superseded by this FAIL verdict
-
-## Repairs
-
-1. **Hard two-hour privacy boundary:** rooms now receive an absolute expiry when
-   they are created. A scheduled task removes the room at that deadline and
-   announces expiry; socket sessions also wait on the same deadline and send a
-   close frame. Expired socket upgrades are rejected. The regression uses a
-   short injected TTL to prove idle eviction, restart loss, and closure of an
-   already-open WebSocket. Production keeps the exact 7,200-second limit.
-2. **Complete claims proof:** the ephemeral-room claim now runs the controlling
-   Rust regression instead of trusting an advertised field. The demo proof now
-   asserts no API request or browser storage, and the rate-limit proof asserts
-   exactly 40 successes followed by five `429` responses with `Retry-After: 1`.
-   Added listed/proved claims for the 12-second sample round and the visual cue
-   fallback when vibration is unavailable.
-3. **Offline shell:** Vite now emits a versioned worker precache containing the
-   hashed JS and CSS entry files, manifest, and responsive art. Offline asset
-   misses return an asset error rather than HTML. The document links the web
-   manifest. The browser regression clears the HTTP cache after worker control,
-   reloads `/demo` offline, and asserts the interactive sample remains rendered.
-4. **Mobile interaction targets:** header, demo-banner, footer, and legal links
-   have 44 by 44 CSS-pixel targets. The 390px browser regression measures every
-   visible interactive control on each routed screen.
-5. **HTTP 404:** the client still renders the designed recovery page, but unknown
-   frontend URLs (including `/404`) now return status 404. A browser and Rust
-   regression cover this boundary.
-6. **File validation:** non-audio file selections now say they were not loaded;
-   they do not receive the false “ready” confirmation.
-
-## Verification evidence
-
-Run from a clean dependency install on 2026-08-28:
+Run on 2026-08-29 from the report commit plus this repair:
 
 ```sh
 npm ci
-# 59 packages; 0 vulnerabilities
-
-# every command declared in .factory/claims.json, independently
-node --input-type=module -e "import {readFileSync} from 'node:fs'; import {execSync} from 'node:child_process'; for (const c of JSON.parse(readFileSync('.factory/claims.json', 'utf8'))) execSync(c.test, {stdio:'inherit'});"
+# 59 packages installed; 0 vulnerabilities
 
 npm test
-# 3 Vitest + 5 Rust tests + clean-entry regression (2 browser projects)
-# + 27 passed Playwright checks and 1 intentional desktop-only skip
+# 3 Vitest tests; release contract passed; 5 Rust tests;
+# clean browser entry point passed in both projects;
+# 27 Playwright tests passed, 1 intentional desktop touch-target skip
+
+# Every command in .factory/claims.json was also run independently: all passed.
 
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo build --release --locked
 npm run build
 git diff --check
+# all passed
 ```
 
-All commands passed. The browser suite covers desktop Chromium and the 390px
-mobile project, keyboard skip/navigation/error recovery, axe serious/critical
-findings across product routes, reduced-motion behavior, no horizontal overflow,
-privacy request capture, local audio, offline worker reload, update cache
-replacement, API rate policy, visual fallback, and the real host/companion flow.
+The browser suite covered desktop Chromium and a 390 by 844 px viewport. It
+proved the two-context host/companion score flow, keyboard skip and error focus,
+200% text reflow, 44 px mobile targets, no console errors, reduced motion,
+same-origin privacy, local audio isolation, offline reload, HTTP 404 behavior,
+and rate policy. Axe found no serious or critical findings across `/`, `/demo`,
+`/host`, `/join`, `/privacy`, `/terms`, `/404`, and a missing route in both
+projects.
 
-Final production bundle: JS 23.16 kB raw / 7.85 kB gzip; CSS 15.54 kB raw /
-4.20 kB gzip. The production Rust binary built successfully.
+All 12 claim commands in `.factory/claims.json` passed from the clean install.
+The rate regression observed exactly 40 successes and five `429` responses,
+each with `Retry-After: 1`. The ephemeral-room regression proved scheduled TTL
+eviction, restart loss, and closure of an open socket.
 
-## Run and deploy
+The production frontend is 23.16 kB raw / 7.85 kB gzip JavaScript and 15.54 kB
+raw / 4.20 kB gzip CSS. A mobile Lighthouse run against the repaired live site
+scored 100 performance, 100 accessibility, 100 best practices, and 100 SEO.
+Measured LCP was 1.5 s, total blocking time 20 ms, and CLS 0.
+
+## Container and deployment evidence
+
+The repair was pushed to `main`. Azure Container Registry built the repository
+source tarball without `.git` using the full repair SHA as `BUILD_SHA`:
+
+- ACR run: `chsp` (succeeded in 2m22s)
+- Image: `sociobotregistry.azurecr.io/sf-haptic-beat-relay:86801dec2072`
+- Image digest: `sha256:14e64380f61b1c70dc674577ae19ccbb086605293210241d0bcc189761111ba3`
+- Rust builder resolved from `rust:1-slim` to
+  `sha256:17d1ba895198f9934c6314ec5346a0d5115372f3243390c3d731e242f35c2f27`
+- Container App revision: `sf-haptic-beat-relay--0000005`
+- Scale boundary: one minimum and one maximum replica
+
+Live `https://haptic-beat-relay.sociobot.in/health` returned:
+
+```json
+{"build_sha":"86801dec20729d74390496e2580f4aea180dfe0f","status":"ok"}
+```
+
+Post-deploy checks passed on the custom domain:
+
+- Desktop and 390 px route, keyboard, axe, privacy, and reduced-motion smoke.
+- Service-worker update left no waiting worker; `/demo` then reloaded and stayed
+  interactive offline.
+- A desktop host and fresh 390 px companion joined one room, relayed a cue and
+  tap, and displayed the same score.
+- Unknown route returned 404. HTML returned `no-cache`; hashed JavaScript
+  returned `public, max-age=31536000, immutable`.
+- CSP, `X-Content-Type-Options: nosniff`, and
+  `Referrer-Policy: strict-origin-when-cross-origin` were present.
+- A 45-request live burst returned 41 successes and four `429` responses while
+  crossing the one-second window; all four included `Retry-After: 1`.
+- A 100-request smoke with distinct forwarded client identities returned
+  100 successes in 2,651 ms.
+
+There is no separate package/consumer artifact for this `web-with-backend`
+product. Accounts, payment, AI, and persistent user storage are not part of the
+brief, so their specific checks are not applicable.
+
+## Run and verify
 
 ```sh
 npm ci
+npm test
 npm run build
 cargo run --release
-# visit http://localhost:8080/demo
+# open http://localhost:8080/demo
 ```
 
-The root Dockerfile remains the deployment artifact: multi-stage, non-root,
-and serves the frontend and Axum service on `PORT=8080`. The repair commit
-`ffe1cd25ff6f88ab9d3e6bb6c3097a07108a263c` was pushed to `main`, built in Azure
-Container Registry as `sociobotregistry.azurecr.io/sf-haptic-beat-relay:ffe1cd25ff6f`
-(ACR run `chj1`, succeeded), and deployed to Container App revision
-`sf-haptic-beat-relay--0000002`. Live `https://haptic-beat-relay.sociobot.in/health`
-returned that full build SHA. Live `/demo` returned the manifest link and security
-headers; an unknown URL returned HTTP 404. Docker is not installed in this worker,
-so the equivalent local image smoke was not available.
+For a container smoke, build with `--build-arg BUILD_SHA=<sha>`, start with only
+`PORT=8080`, and check `/health`. Docker was unavailable in the worker itself;
+the successful ACR source build and live revision exercised that exact Dockerfile.
 
-## Known gaps
+## Known gaps and next steps
 
-- No Docker-compatible runtime is available in this worker for a local image
-  smoke test; the remote ACR Docker build and live health check passed.
-- No standalone Lighthouse executable is installed; the browser suite verifies
-  the relevant accessibility, mobile, offline, and bundle-size gates.
+No release-blocking gaps remain. Physical vibration depends on browser and
+device support as stated in the brief; both the haptic attempt and visual cue
+fallback are covered, while headless verification can observe only the fallback.
