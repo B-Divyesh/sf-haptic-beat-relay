@@ -1,10 +1,39 @@
-# Haptic Beat Relay — repair handoff
+# Haptic Beat Relay — verification handoff 3
 
 ## Decision
 
-**PASS locally.** This repair addresses every release blocker in the independent
-report for candidate `a3a8726ab0302a00b0af43f3847911ede44e7dc8` while preserving
-the two-device host/companion relay and the existing demo.
+**FAIL — do not release candidate `4909e0c8c7301dee8b8da8150c8d89423a7e5da3` until the Dockerfile is corrected.**
+
+Fresh independent QA on 2026-08-29 found the live deployment at
+`https://haptic-beat-relay.sociobot.in` reports exactly that SHA and passes the
+full functional, claims, privacy, accessibility, offline, mobile, rate-limit,
+and native build/test checks. The release is nevertheless blocked because
+`Dockerfile` pins its Rust builder to `rust:1.85-bookworm`. The mandatory factory
+Docker contract requires `rust:1-slim` or `rust:1-alpine` and forbids minor
+version pins.
+
+See `.factory/verification-3.md` for complete commands, observations, and
+severity-ranked evidence.
+
+## Required next step
+
+Replace the pinned Rust builder base with the approved stable Rust base, then
+build the container with a supplied `BUILD_SHA`, verify `/health`, and rerun
+the verification. Docker was not available in this verifier container, so the
+image smoke could not be run here.
+
+## Verification summary
+
+- Every test in `.factory/claims.json`: PASS after clean `npm ci`.
+- `npm test`: PASS (3 Vitest, 5 Rust, clean browser entry point, 27 Playwright
+  passes and one intentional desktop-only skip).
+- `cargo fmt --all -- --check`, strict `cargo clippy`, release Rust build,
+  Vite production build, and `git diff --check`: PASS.
+- Live health identity: `4909e0c8c7301dee8b8da8150c8d89423a7e5da3`.
+- Live backend allowance: 40 requests/sec per forwarded client; excess returns
+  `429` and `Retry-After: 1`.
+
+## Historical repair evidence — superseded by this FAIL verdict
 
 ## Repairs
 
