@@ -1,3 +1,47 @@
+# Haptic Beat Relay — adversarial review 1 handoff
+
+## Status: FAIL
+
+- **Work order:** `haptic-beat-relay-review-1`
+- **Reviewed repository HEAD:** `af011f1c1b97e987debafb11590eb14f5b361ab1`
+- **Live URL:** <https://haptic-beat-relay.sociobot.in>
+- **Review:** [review-1.md](review-1.md)
+- **Date:** 2026-08-29 UTC
+
+The cold first-read is clear, the real relay passes 30 fresh live rounds, the
+demo sandbox does not touch API or browser storage, `npm test` and `npm run
+build` pass, and live Axe scans report zero violations. The review still fails
+on two blocking findings:
+
+1. `npm run test:live-topology` fails from the clean current clone because the
+   deployed image/health SHA is `1a9cd41…`, while repository HEAD is
+   `af011f1…`.
+2. At 390 × 844, `/demo` ends its first viewport at “Sam is ready”; the sample
+   details start at y=950, start button at y=1125, and live score at y=1602.
+   The core round is not visible immediately after the one-click demo entry.
+
+The full review records 39 additional copy, terminology, heading, and unlisted-
+claim findings. No product code was changed.
+
+Verification performed:
+
+```sh
+npm ci
+# every command in .factory/claims.json, individually
+npm test
+npm run build
+/opt/fleet/lib/verify-url.sh https://haptic-beat-relay.sociobot.in <temp-evidence-dir>
+npx @axe-core/cli <all public routes> --exit
+```
+
+`npm test` passed 36 Playwright tests with 2 expected skips, plus all unit,
+Rust, and contract checks. Fifteen of sixteen manifest claim commands passed;
+only `singleton-deployment` failed. The prior multi-replica defect remains
+fixed: running the topology check against the deployed SHA confirms one active,
+running, ready HTTP replica with min/max one.
+
+## Prior handoff retained for history
+
 # Haptic Beat Relay — verification 19 handoff
 
 ## Status: PASS
