@@ -78,7 +78,7 @@ RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 - The companion uses phone vibration or a connected gamepad when supported.
 - The screen flashes each cue when vibration is unavailable.
 
-Rooms expire after two hours and disappear on server restart. The relay intentionally runs as exactly one Container App replica because its temporary room, WebSocket state, and per-client rate bucket are held in that process. The checked-in deployment contract pins both the minimum and maximum to one; it must not be scaled out without moving room state, broadcast delivery, and rate limiting to a shared service. The service has no database, user accounts, music catalog, tracking script, or payment code.
+Rooms expire after two hours and disappear on server restart. The relay intentionally runs as exactly one ready Container App replica because its temporary room, WebSocket state, and per-client rate bucket are held in that process. The checked-in deployment contract pins both the minimum and maximum to one; it must not be scaled out without moving room state, broadcast delivery, and rate limiting to a shared service. The service has no database, user accounts, music catalog, tracking script, or payment code.
 
 ## Container
 
@@ -95,8 +95,10 @@ The multi-stage image runs as a non-root user. `/health` reports the build SHA. 
 The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container
 serves the built frontend and relay backend together on `PORT`.
 [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth
-runtime contract: one active revision, exactly one replica, and HTTP ingress
-for WebSocket upgrades. Finalize `.factory/handoff.md`, commit every release
+runtime contract: one active revision, exactly one running and ready replica,
+and HTTP ingress for WebSocket upgrades. Its state topology is deliberately
+ephemeral and process-local: room records, WebSocket fan-out, and rate buckets
+have no volume or database. Finalize `.factory/handoff.md`, commit every release
 file, and push that commit before running
 `npm run deploy -- <full-git-sha>` as the last release step. The command rejects
 a dirty tree, an unpushed commit, or a handoff from an earlier commit. It builds
