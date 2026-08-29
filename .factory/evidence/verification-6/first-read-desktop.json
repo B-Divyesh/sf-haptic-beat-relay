@@ -1,0 +1,73 @@
+{
+  "status": 200,
+  "title": "Haptic Beat Relay — send tactile beat cues",
+  "body": "Skip to main content\nHAPTIC BEAT RELAY\nDemo\nJoin\nPrivacy\n\nONE HOST · ONE COMPANION · ONE BEAT\n\nSEND EVERY BEAT TO A FRIEND\n\nFor friends and rhythm-game makers who need tactile cues and shared timing without an account.\n\nTry it with sample data\nA paired sample round opens now.\nCreate a real room\n01\nFree to use\n02\nMusic stays on the host device\n03\nThe relay needs a connection\nOne device sends the pulse. The other taps it back.\n\nTHE SHARED VIEW\n\nSEE THE SAME ROUND ON BOTH DEVICES\n\nThe host sets the pace. The companion feels each cue and taps the beat back.\n\n Paired with companion\nShared accuracy\n88%\n\nHOW IT WORKS\n\nRUN A ROUND IN THREE STEPS\nCREATE A ROOM.\nShare its six-character code with one friend.\nSET THE BEAT.\nChoose the tempo or load an audio loop from your device.\nTAP IT BACK.\nThe companion feels each cue and builds a shared score.\n\nCLEAR LIMITS\n\nYOUR BROWSER DECIDES HOW HAPTICS FEEL\n\nPhone vibration and controller haptics vary by browser and device.\n\nThe screen still flashes each cue when vibration is unavailable.\n\nRooms hold only live relay messages. Closing the server clears every room.\n\nThis tool does not stream music, match players, or include music files.\n\nSend tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+  "viewport": [
+    {
+      "tag": "A",
+      "text": "HAPTIC BEAT RELAY",
+      "top": 14,
+      "bottom": 58,
+      "visible": true
+    },
+    {
+      "tag": "A",
+      "text": "Demo",
+      "top": 14,
+      "bottom": 58,
+      "visible": true
+    },
+    {
+      "tag": "A",
+      "text": "Join",
+      "top": 14,
+      "bottom": 58,
+      "visible": true
+    },
+    {
+      "tag": "A",
+      "text": "Privacy",
+      "top": 14,
+      "bottom": 58,
+      "visible": true
+    },
+    {
+      "tag": "P",
+      "text": "ONE HOST · ONE COMPANION · ONE BEAT",
+      "top": 144,
+      "bottom": 159,
+      "visible": true
+    },
+    {
+      "tag": "H1",
+      "text": "SEND EVERY BEAT TO A FRIEND",
+      "top": 175,
+      "bottom": 784,
+      "visible": true
+    },
+    {
+      "tag": "P",
+      "text": "For friends and rhythm-game makers who need tactile cues and shared timing without an account.",
+      "top": 808,
+      "bottom": 912,
+      "visible": true
+    },
+    {
+      "tag": "A",
+      "text": "Try it with sample data",
+      "top": 944,
+      "bottom": 993,
+      "visible": true
+    }
+  ],
+  "htmlLang": "en",
+  "url": "https://haptic-beat-relay.sociobot.in/",
+  "requests": [
+    "https://haptic-beat-relay.sociobot.in/",
+    "https://haptic-beat-relay.sociobot.in/assets/index-ChbPiOug.js",
+    "https://haptic-beat-relay.sociobot.in/assets/index-DssFcfwD.css",
+    "https://haptic-beat-relay.sociobot.in/art/relay-clearing-1280.webp",
+    "https://haptic-beat-relay.sociobot.in/favicon.svg"
+  ],
+  "errors": []
+}
