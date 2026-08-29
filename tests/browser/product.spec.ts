@@ -28,7 +28,7 @@ test('landing page explains the job and passes an accessibility scan', async ({ 
   expect(errors).toEqual([]);
 });
 
-test('regression: the audience and sample action fit in the first viewport', async ({ page }) => {
+test('regression: the audience and sample action fit in the first viewport', async ({ page }, testInfo) => {
   await page.goto('/');
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
@@ -41,6 +41,12 @@ test('regression: the audience and sample action fit in the first viewport', asy
     expect(box).not.toBeNull();
     expect(box!.y, await locator.innerText()).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height, await locator.innerText()).toBeLessThanOrEqual(viewport!.height);
+  }
+  if (testInfo.project.name === 'mobile') {
+    const facts = page.locator('.plain-facts');
+    const factsBox = await facts.boundingBox();
+    expect(factsBox).not.toBeNull();
+    expect(factsBox!.y + factsBox!.height).toBeLessThanOrEqual(viewport!.height);
   }
 });
 
@@ -58,7 +64,7 @@ test('keyboard users can skip navigation, change routes, and recover from form e
   const demoLink = page.getByRole('link', { name: 'Try it with sample data' });
   await demoLink.focus();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/demo$/);
+  await expect(page).toHaveURL(/\?demo=1$/);
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
 
   await page.goto('/join');
@@ -68,12 +74,21 @@ test('keyboard users can skip navigation, change routes, and recover from form e
   await expect(page.locator('#join-code')).toBeFocused();
 });
 
-test('@claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds', async ({ page }) => {
+test('@claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds', async ({ page }, testInfo) => {
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
-  await page.goto('/demo');
+  await page.goto('/?demo=1');
   await expect(page.getByText('Demo — sample data, nothing is saved')).toBeVisible();
-  await expect(page.getByText('Sam is ready', { exact: true })).toBeVisible();
+  await expect(page.locator('#round-state')).toContainText('Sam returned 3 taps');
+  await expect(page.locator('#score-value')).toHaveText('86%');
+  await expect(page.locator('#tap-count')).toHaveText('3 returned taps.');
+  if (testInfo.project.name === 'mobile') {
+    const viewport = page.viewportSize();
+    const startBox = await page.getByRole('button', { name: 'Start sample round' }).boundingBox();
+    const scoreBox = await page.locator('#score-value').boundingBox();
+    expect(startBox!.y + startBox!.height).toBeLessThanOrEqual(viewport!.height);
+    expect(scoreBox!.y + scoreBox!.height).toBeLessThanOrEqual(viewport!.height);
+  }
   await page.getByRole('button', { name: 'Start sample round' }).click();
   await expect(page.locator('#tap-count')).not.toHaveText('No returned taps yet.');
   await expect(page.getByRole('button', { name: 'Sample round in progress' })).toBeDisabled();
@@ -333,7 +348,7 @@ test('service-worker-only offline reload keeps the built shell and manifest avai
 test('unknown routes return an HTTP 404 and non-audio files are rejected', async ({ page }) => {
   const missing = await page.goto('/definitely-not-a-real-route');
   expect(missing?.status()).toBe(404);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('This beat has no room');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Page not found');
 
   await page.goto('/host');
   await expect(page.locator('#room-code')).not.toHaveText('······');
@@ -348,6 +363,8 @@ test('real routes have one heading, useful titles, and no mobile overflow', asyn
     await page.goto(route);
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page).not.toHaveTitle(/^Haptic Beat Relay$/);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /.+/);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /haptic-beat-relay\.sociobot\.in/);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `${route} overflow in ${testInfo.project.name}`).toBeLessThanOrEqual(1);
     const accessibility = await new AxeBuilder({ page }).analyze();

@@ -4,14 +4,14 @@
     "claim": "Try a paired sample round without setup or saved data.",
     "where": "landing primary action, demo banner, README",
     "test": "npm run test:browser -- --grep @claim:demo-sandbox",
-    "sandbox": "fresh browser context at /demo; start and reset the seeded round while asserting no API requests or browser storage"
+    "sandbox": "fresh browser context at /?demo=1; start and reset the seeded round while asserting no API requests or browser storage"
   },
   {
     "id": "sample-duration",
     "claim": "The sample round lasts 12 seconds.",
     "where": "demo setup, README, demo guide",
     "test": "npm run test:browser -- --grep @claim:sample-duration",
-    "sandbox": "fresh browser context at /demo; start the sample, verify it remains active before completion, then observe its 12-second completion"
+    "sandbox": "fresh browser context at /?demo=1; start the sample, verify it remains active before completion, then observe its 12-second completion"
   },
   {
     "id": "local-audio",
@@ -43,17 +43,17 @@
   },
   {
     "id": "shared-score",
-    "claim": "A companion receives each cue, taps back, and builds a shared accuracy score.",
+    "claim": "A friend receives each cue, taps back, and builds a shared accuracy score.",
     "where": "landing preview and steps, live room, README",
     "test": "npm run test:browser -- --grep @claim:shared-score",
     "sandbox": "two fresh browser contexts; create and join one room, start a round, receive a cue, return a tap, and see the same scored result"
   },
   {
     "id": "live-relay",
-    "claim": "The deployed relay keeps fresh host and companion room, cue, tap, and score traffic connected.",
+    "claim": "The deployed relay keeps fresh host and friend room, cue, tap, and score traffic connected.",
     "where": "README live verification and deployment sections",
     "test": "RELAY_ROUNDS=30 npm run test:live-relay",
-    "sandbox": "30 fresh API rooms plus 30 fresh desktop-host and 390 px companion browser pairs against the live deployment; assert create, join, WebSocket cue, returned tap, shared score, and no browser errors"
+    "sandbox": "30 fresh API rooms plus 30 fresh desktop-host and 390 px friend browser pairs against the live deployment; assert create, join, WebSocket cue, returned tap, shared score, and no browser errors"
   },
   {
     "id": "ephemeral-rooms",
@@ -88,12 +88,12 @@
     "claim": "The screen flashes each cue when vibration is unavailable.",
     "where": "landing limits, README",
     "test": "npm run test:browser -- --grep @claim:visual-cue",
-    "sandbox": "two fresh browser contexts with vibration unavailable; relay one cue and assert the companion tap pad enters its visual cue state"
+    "sandbox": "two fresh browser contexts with vibration unavailable; relay one cue and assert the friend tap pad enters its visual cue state"
   },
   {
     "id": "haptic-output",
-    "claim": "Each companion cue uses phone vibration and connected controller haptics when the browser supports them.",
-    "where": "landing, live companion, terms, README",
+    "claim": "Each friend cue uses phone vibration and connected controller haptics when the browser supports them.",
+    "where": "landing, live friend view, terms, README",
     "test": "npm run test:browser -- --grep @claim:haptic-output",
     "sandbox": "two fresh browser contexts; stub both haptic APIs, relay one real cue, and assert vibrate(45) plus dual-rumble actuation"
   },

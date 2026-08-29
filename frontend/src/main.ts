@@ -31,6 +31,21 @@ const pageTitles: Record<string, string> = {
   '/404': 'Page not found — Haptic Beat Relay',
 };
 
+const pageDescriptions: Record<string, string> = {
+  '/': 'Send a beat loop to one phone for vibration cues, returned taps, and a shared timing score.',
+  '/demo': 'Try a paired sample beat round with returned taps and a shared score.',
+  '/host': 'Open a room, set the tempo, and send beat cues to one friend.',
+  '/join': 'Join a friend’s room to receive beat cues and tap them back.',
+  '/privacy': 'Read how temporary Haptic Beat Relay rooms handle data.',
+  '/terms': 'Read the terms for using Haptic Beat Relay.',
+  '/404': 'The requested Haptic Beat Relay page was not found.',
+};
+
+function setMeta(name: string, content: string, property = false): void {
+  const selector = property ? `meta[property="${name}"]` : `meta[name="${name}"]`;
+  document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', content);
+}
+
 function header(): string {
   return `
     <header class="site-header">
@@ -40,7 +55,7 @@ function header(): string {
         <span>Haptic Beat Relay</span>
       </a>
       <nav aria-label="Main navigation">
-        <a href="/demo" data-route>Demo</a>
+        <a href="/?demo=1" data-route>Demo</a>
         <a href="/join" data-route>Join</a>
         <a href="/privacy" data-route>Privacy</a>
       </nav>
@@ -63,7 +78,7 @@ function footer(): string {
 function demoBanner(): string {
   return `<aside class="demo-banner" aria-label="Demo status">
     <strong>Demo — sample data, nothing is saved</strong>
-    <span class="demo-actions"><button class="text-button" id="reset-demo" type="button">Reset demo</button><a href="/host" data-route>Start for real</a></span>
+    <span class="demo-actions"><button class="text-button" id="reset-demo" type="button">Reset demo</button><a href="/host" data-route>Create a real room</a></span>
   </aside>`;
 }
 
@@ -72,17 +87,17 @@ function landingPage(): string {
     <main id="main">
       <section class="hero scene-section" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow">One host · one companion · one beat</p>
+          <p class="eyebrow">One host · one friend · one beat</p>
           <h1 id="hero-title" tabindex="-1">Send every beat to a friend</h1>
           <p class="lede">For friends and rhythm-game makers who need tactile cues and shared timing without an account.</p>
           <div class="hero-action-row">
-            <a class="button primary" href="/demo" data-route>Try it with sample data</a>
+            <a class="button primary" href="/?demo=1" data-route>Try it with sample data</a>
             <span>A paired sample round opens now.</span>
           </div>
           <a class="button secondary" href="/host" data-route>Create a real room</a>
           <ul class="plain-facts" aria-label="Product facts">
             <li><span aria-hidden="true">01</span> Free to use</li>
-            <li><span aria-hidden="true">02</span> Music stays on the host device</li>
+            <li><span aria-hidden="true">02</span> Audio loops stay on the host device</li>
             <li><span aria-hidden="true">03</span> The relay needs a connection</li>
           </ul>
         </div>
@@ -99,10 +114,10 @@ function landingPage(): string {
         <div>
           <p class="eyebrow">The shared view</p>
           <h2 id="preview-title">See the same round on both devices</h2>
-          <p>The host sets the pace. The companion feels each cue and taps the beat back.</p>
+          <p>The host sets the pace. Your friend feels each cue and taps the beat back.</p>
         </div>
         <div class="signal-stage" aria-label="Preview of a connected room">
-          <div class="stage-status"><span class="live-dot"></span> Paired with companion</div>
+          <div class="stage-status"><span class="live-dot"></span> Paired with your friend</div>
           <div class="beat-rail" aria-hidden="true"><i></i><i class="active"></i><i></i><i></i></div>
           <div class="preview-score"><span>Shared accuracy</span><strong>88%</strong></div>
           <div class="meter"><span class="score-88"></span></div>
@@ -115,20 +130,19 @@ function landingPage(): string {
         <ol class="steps">
           <li><strong>Create a room.</strong><span>Share its six-character code with one friend.</span></li>
           <li><strong>Set the beat.</strong><span>Choose the tempo or load an audio loop from your device.</span></li>
-          <li><strong>Tap it back.</strong><span>The companion feels each cue and builds a shared score.</span></li>
+          <li><strong>Tap it back.</strong><span>Your friend feels each cue and builds a shared score.</span></li>
         </ol>
       </section>
 
       <section class="limits-section" aria-labelledby="limits-title">
         <div>
           <p class="eyebrow">Clear limits</p>
-          <h2 id="limits-title">Your browser decides how haptics feel</h2>
+          <h2 id="limits-title">Vibration varies by browser and device</h2>
         </div>
         <div class="prose">
-          <p>Phone vibration and controller haptics vary by browser and device.</p>
+          <p>Phone vibration and controller vibration vary by browser and device.</p>
           <p>The screen still flashes each cue when vibration is unavailable.</p>
           <p>Rooms hold only live relay messages. Closing the server clears every room.</p>
-          <p>This tool does not stream music, match players, or include music files.</p>
         </div>
       </section>
     </main>${footer()}`;
@@ -157,22 +171,22 @@ function hostPage(): string {
           <input id="audio-loop" type="file" accept="audio/*" />
           <p class="file-name" id="file-name">Built-in click is ready.</p>
           <button class="button primary wide" id="start-round" type="button" disabled>Start 60-second round</button>
-          <p class="control-help">The button activates when your companion joins.</p>
+          <p class="control-help">The button activates when your friend joins.</p>
         </section>
-        ${roundPanel('Waiting for a companion', 0, 0)}
+        ${roundPanel('Waiting for a friend', 0, 0)}
       </div>
     </section>
   </main>${footer()}`;
 }
 
-function roundPanel(status: string, score: number, round: number): string {
+function roundPanel(status: string, score: number, round: number, tapText = 'No returned taps yet.'): string {
   return `<section class="round-panel" aria-labelledby="round-title">
     <div class="round-top"><h2 id="round-title">Live round</h2><span id="round-count">Round ${round || '—'}</span></div>
     <div class="beat-orbit" id="beat-orbit" aria-hidden="true"><span></span><span></span><span></span><span></span><b></b></div>
     <p class="round-state" id="round-state" aria-live="polite">${status}</p>
     <div class="score-readout"><span>Shared accuracy</span><strong id="score-value">${score}%</strong></div>
     <div class="meter large" role="meter" aria-label="Shared accuracy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${score}"><span id="score-meter" class="score-${score}"></span></div>
-    <p class="tap-count" id="tap-count">No returned taps yet.</p>
+    <p class="tap-count" id="tap-count">${tapText}</p>
   </section>`;
 }
 
@@ -194,7 +208,7 @@ function companionPage(code = ''): string {
 
   return `${header()}<main id="main" class="app-main">
     <section class="join-shell" aria-labelledby="join-title">
-      <p class="eyebrow">Companion device</p>
+      <p class="eyebrow">Friend device</p>
       <h1 id="join-title" tabindex="-1">Join a friend’s beat room</h1>
       <p>Enter the host’s code. Keep this screen open for vibration cues.</p>
       ${codeEntry}
@@ -205,22 +219,24 @@ function companionPage(code = ''): string {
 function demoPage(): string {
   return `${demoBanner()}${header()}<main id="main" class="app-main demo-main">
     <section class="room-shell" aria-labelledby="demo-title">
-      <div class="room-heading">
+      <div class="room-heading demo-heading">
         <p class="eyebrow">Sample host · paired with Sam</p>
         <h1 id="demo-title" tabindex="-1">Try a tactile beat round</h1>
         <p>This sample uses a 104 BPM practice loop and realistic returned taps.</p>
       </div>
-      <section class="code-board sample-code" aria-label="Sample room">
-        <div><span>Sample room</span><strong>DEMO24</strong></div><span class="sample-label">Sam is ready</span>
+      <section class="demo-live" aria-labelledby="sample-round-title">
+        <div class="demo-live-top"><div><p class="eyebrow">Paired sample</p><h2 id="sample-round-title">Sam taps each cue back</h2></div><button class="button primary" id="demo-start" type="button">Start sample round</button></div>
+        ${roundPanel('Sam returned 3 taps in the last round.', 86, 3, '3 returned taps.')}
       </section>
-      <div class="host-grid">
+      <div class="host-grid demo-details">
         <section class="controls-panel" aria-labelledby="sample-title">
           <h2 id="sample-title">Sample setup</h2>
           <dl class="sample-list"><div><dt>Tempo</dt><dd>104 BPM</dd></div><div><dt>Loop</dt><dd>Night practice click</dd></div><div><dt>Past rounds</dt><dd>82% · 89%</dd></div></dl>
-          <button class="button primary wide" id="demo-start" type="button">Start sample round</button>
           <p class="control-help">The sample round lasts 12 seconds.</p>
         </section>
-        ${roundPanel('Sam is ready. Start when you are.', 86, 3)}
+        <section class="code-board sample-code" aria-label="Sample room">
+          <div><span>Sample room</span><strong>DEMO24</strong></div><span class="sample-label">Sam is ready</span>
+        </section>
       </div>
     </section>
   </main>${footer()}`;
@@ -230,14 +246,13 @@ function legalPage(kind: 'privacy' | 'terms'): string {
   const privacy = kind === 'privacy';
   return `${header()}<main id="main" class="legal-main"><article>
     <p class="eyebrow">${privacy ? 'Privacy' : 'Terms'}</p>
-    <h1 tabindex="-1">${privacy ? 'Your room leaves no account behind' : 'Use the relay with care'}</h1>
+    <h1 tabindex="-1">${privacy ? 'How temporary rooms handle your data' : 'Terms for using Haptic Beat Relay'}</h1>
     ${privacy ? `<h2>What the relay handles</h2>
       <p>The server holds a room code, two random access tokens, and live timing messages.</p>
       <p>Room state stays in server memory for up to two hours. A server restart clears it sooner.</p>
       <p>Your audio loop stays inside the host browser. The relay never receives the file.</p>
       <h2>What we do not collect</h2>
       <p>There are no accounts, advertising trackers, or analytics scripts.</p>
-      <p>The server writes routine operational logs. These logs may include an IP address and request path.</p>
       <h2>Questions</h2><p>Email <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p>` : `<h2>The service</h2>
       <p>Haptic Beat Relay is free software for small music and game sessions.</p>
       <p>Browser and device support can change how vibration and controller cues work.</p>
@@ -252,26 +267,40 @@ function legalPage(kind: 'privacy' | 'terms'): string {
 
 function notFoundPage(): string {
   return `${header()}<main id="main" class="lost-main">
-    <section><p class="eyebrow">Signal lost · 404</p><h1 tabindex="-1">This beat has no room</h1><p>The address does not lead to an open page.</p><a class="button primary" href="/" data-route>Return to the start</a></section>
+    <section><p class="eyebrow">Signal lost · 404</p><h1 tabindex="-1">Page not found</h1><p>The address does not lead to an open page.</p><a class="button primary" href="/" data-route>Return to the start</a></section>
     <div class="lost-signal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   </main>${footer()}`;
 }
 
-function navigate(path: string, push = true, focusHeading = true): void {
+function isDemoPath(path: string, search = ''): boolean {
+  return path === '/demo' || new URLSearchParams(search).get('demo') === '1';
+}
+
+function navigate(target: string, push = true, focusHeading = true): void {
+  const destination = new URL(target, location.origin);
+  const path = destination.pathname;
+  const search = destination.search;
+  const demo = isDemoPath(path, search);
   cleanupPage?.();
   cleanupPage = undefined;
-  if (push && location.pathname !== path) {
+  if (push && `${location.pathname}${location.search}` !== `${path}${search}`) {
     history.replaceState({ ...history.state, scrollY: window.scrollY }, '', location.href);
-    history.pushState({ scrollY: 0 }, '', path);
+    history.pushState({ scrollY: 0 }, '', `${path}${search}`);
   }
   const joinMatch = path.match(/^\/join\/([A-Za-z0-9]{6})$/);
-  let knownPath = pageTitles[path] ? path : joinMatch ? '/join' : '/404';
+  const knownPath = demo ? '/demo' : pageTitles[path] ? path : joinMatch ? '/join' : '/404';
   document.title = pageTitles[knownPath];
+  const description = pageDescriptions[knownPath];
+  setMeta('description', description);
+  setMeta('og:title', document.title, true);
+  setMeta('og:description', description, true);
+  setMeta('twitter:title', document.title);
+  setMeta('twitter:description', description);
   document.querySelector<HTMLLinkElement>('link[rel="canonical"]')!.href = `https://haptic-beat-relay.sociobot.in${knownPath}`;
 
-  if (path === '/') app.innerHTML = landingPage();
+  if (demo) app.innerHTML = demoPage();
+  else if (path === '/') app.innerHTML = landingPage();
   else if (path === '/host') app.innerHTML = hostPage();
-  else if (path === '/demo') app.innerHTML = demoPage();
   else if (path === '/privacy') app.innerHTML = legalPage('privacy');
   else if (path === '/terms') app.innerHTML = legalPage('terms');
   else if (path === '/join') app.innerHTML = companionPage();
@@ -282,7 +311,7 @@ function navigate(path: string, push = true, focusHeading = true): void {
   if (path === '/host') void setupHost();
   if (path === '/join') setupJoinForm();
   if (joinMatch) void setupCompanion(normalizeRoomCode(joinMatch[1]));
-  if (path === '/demo') setupDemo();
+  if (demo) setupDemo();
 
   window.scrollTo(0, push ? 0 : Number(history.state?.scrollY ?? 0));
   const heading = app.querySelector<HTMLElement>('h1');
@@ -297,10 +326,11 @@ function bindGlobalActions(): void {
     link.addEventListener('click', (event) => {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
-      navigate(new URL(link.href).pathname);
+      const route = new URL(link.href);
+      navigate(`${route.pathname}${route.search}`);
     });
   });
-  document.querySelector('#reset-demo')?.addEventListener('click', () => navigate('/demo', false));
+  document.querySelector('#reset-demo')?.addEventListener('click', () => navigate('/?demo=1', false));
 }
 
 function setupJoinForm(): void {
@@ -378,7 +408,7 @@ async function setupHost(): Promise<void> {
     socket = openRoomSocket(room.code, 'host', room.host_token, (message) => {
       if (message.type === 'presence' && message.role === 'companion') {
         paired = Boolean(message.connected);
-        state.innerHTML = `<span class="status-dot ${paired ? 'connected' : ''}"></span>${paired ? 'Companion connected. The round is ready.' : 'Companion left. Share the code to reconnect.'}`;
+        state.innerHTML = `<span class="status-dot ${paired ? 'connected' : ''}"></span>${paired ? 'Your friend is connected. The round is ready.' : 'Your friend left. Share the code to reconnect.'}`;
         start.disabled = !paired;
       }
       if (message.type === 'tap' && typeof message.at === 'number' && beats.length) {
@@ -393,7 +423,7 @@ async function setupHost(): Promise<void> {
       state.innerHTML = `<span class="status-dot"></span>${message}`;
       start.disabled = true;
     });
-    state.innerHTML = '<span class="status-dot"></span>Room open. Waiting for one companion…';
+    state.innerHTML = '<span class="status-dot"></span>Room open. Waiting for one friend…';
 
     copy.addEventListener('click', async () => {
       const link = `${location.origin}/join/${roomCode}`;
@@ -417,7 +447,7 @@ async function setupHost(): Promise<void> {
       const duration = 60;
       socket.send(JSON.stringify({ type: 'round_start', bpm, duration, round }));
       document.querySelector('#round-count')!.textContent = `Round ${round}`;
-      document.querySelector('#round-state')!.textContent = 'Listen for the beat. Your companion is tapping it back.';
+      document.querySelector('#round-state')!.textContent = 'Listen for the beat. Your friend is tapping it back.';
       audioContext ??= new AudioContext();
       void audioContext.resume();
       void audio?.play().catch(() => { fileName.textContent = 'The audio loop could not play. The built-in click is running.'; });
@@ -438,7 +468,7 @@ async function setupHost(): Promise<void> {
     timer = undefined;
     audio?.pause();
     socket?.send(JSON.stringify({ type: 'round_end', score: averageScore(scores), round }));
-    document.querySelector('#round-state')!.textContent = scores.length ? `Round complete with ${averageScore(scores)}% accuracy.` : 'Round complete. No companion taps arrived.';
+    document.querySelector('#round-state')!.textContent = scores.length ? `Round complete with ${averageScore(scores)}% accuracy.` : 'Round complete. No friend taps arrived.';
     start.disabled = !paired;
     start.textContent = 'Start another 60-second round';
   }
@@ -599,8 +629,8 @@ function setupDemo(): void {
 }
 
 history.scrollRestoration = 'manual';
-window.addEventListener('popstate', () => navigate(location.pathname, false));
-navigate(location.pathname, false, false);
+window.addEventListener('popstate', () => navigate(`${location.pathname}${location.search}`, false));
+navigate(`${location.pathname}${location.search}`, false, false);
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined));
