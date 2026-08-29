@@ -54,6 +54,11 @@ assert.match(deployScript, /tr '\[:upper:\]' '\[:lower:\]'/, 'deployment must no
 const imageRollout = deployScript.indexOf('az containerapp update');
 const ingressAfterRollout = deployScript.indexOf('az containerapp ingress update', imageRollout);
 assert.ok(imageRollout >= 0, 'deployment must roll out the image');
+assert.match(
+  deployScript,
+  /--image "sociobotregistry\.azurecr\.io\/sf-haptic-beat-relay:\$revision"[\s\S]*--revision-suffix "r\$short_revision"/,
+  'the guarded rollout must use the full immutable SHA tag and an SHA-derived revision suffix',
+);
 assert.ok(
   ingressAfterRollout > imageRollout,
   'deployment must apply HTTP ingress after the image rollout so a revision update cannot restore Azure\'s Auto transport default',
@@ -74,7 +79,19 @@ assert.match(
   'deployment must run five fresh-client rate-limit bursts after rollout',
 );
 
-console.log('deployment contract ok: final pushed identity, one active revision/replica, HTTP ingress, relay, and repeated rate limits live-checked');
+const topologyChecker = readFileSync(new URL('./verify-live-topology.mjs', import.meta.url), 'utf8');
+assert.match(
+  topologyChecker,
+  /expectedImage = `sociobotregistry\.azurecr\.io\/sf-haptic-beat-relay:\$\{expectedSha\}`/,
+  'the singleton live claim must reject a generic image rollout even when its health SHA matches',
+);
+assert.match(
+  topologyChecker,
+  /new RegExp\(`--r\$\{expectedSha\.slice\(0, 10\)\}\$`\)/,
+  'the singleton live claim must require the guarded SHA-derived revision suffix',
+);
+
+console.log('deployment contract ok: final pushed identity, guarded image provenance, one active revision/replica, HTTP ingress, relay, and repeated rate limits live-checked');
 
 const claims = JSON.parse(readFileSync(new URL('../.factory/claims.json', import.meta.url), 'utf8'));
 const claimSources = [

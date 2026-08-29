@@ -101,8 +101,9 @@ file, and push that commit before running
 `npm run deploy -- <full-git-sha>` as the last release step. The command rejects
 a dirty tree, an unpushed commit, or a handoff from an earlier commit. It builds
 in ACR, forces single-revision mode, applies the scale and transport settings,
-and fails unless the active revision itself has one ready replica and the live
-topology, relay, and five-client rate-limit checks pass. Do not make another
+and fails unless the active revision uses that full immutable image tag with its
+SHA-derived revision suffix, has one ready replica, and passes the live
+topology, relay, and five-client rate-limit checks. Do not make another
 candidate commit after it passes; a later commit needs its own guarded deploy.
 
 ## Project records

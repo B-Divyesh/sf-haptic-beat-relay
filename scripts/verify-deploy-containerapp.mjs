@@ -81,6 +81,10 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
   assert.ok(rollout > singleRevisionMode, 'the image rollout must occur after single revision mode is set');
   assert.ok(ingress > rollout, 'HTTP ingress must be applied after the rollout because Azure can reset it to Auto');
   assert.ok(commands[rollout].includes('--min-replicas 1 --max-replicas 1'), 'the new revision must be pinned to exactly one replica');
+  assert.ok(
+    commands[rollout].includes('--revision-suffix r0123456789'),
+    'the new revision must carry the guarded SHA-derived suffix, not the generic deployment suffix',
+  );
 
   const firstTopologyRead = find("containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query properties.configuration.activeRevisionsMode --output tsv");
   assert.ok(firstTopologyRead > ingress, 'the live topology must be read only after scale and ingress reconciliation');
