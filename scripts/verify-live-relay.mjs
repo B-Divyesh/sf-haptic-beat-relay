@@ -6,6 +6,41 @@ const rounds = Number.parseInt(process.env.RELAY_ROUNDS ?? '30', 10);
 
 assert.ok(Number.isInteger(rounds) && rounds > 0, 'RELAY_ROUNDS must be a positive integer');
 
+// This is the precise production failure that a split process-local relay
+// produces: the create request reaches one process and a fresh companion join
+// reaches another, returning room_not_found. Do this separately from the
+// browser flow so a routing failure is reported at its HTTP boundary first.
+async function verifyFreshApiRooms() {
+  for (let attempt = 1; attempt <= rounds; attempt += 1) {
+    const forwardedFor = `198.18.90.${attempt}`;
+    const headers = { 'X-Forwarded-For': forwardedFor };
+    const created = await fetch(`${baseURL}/api/rooms`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers,
+    });
+    const createBody = await created.text();
+    assert.equal(created.status, 200, `API room ${attempt}: create failed: ${createBody}`);
+    const room = JSON.parse(createBody);
+    assert.match(room.code, /^[A-Z0-9]{6}$/, `API room ${attempt}: invalid room code`);
+
+    const joined = await fetch(`${baseURL}/api/rooms/${room.code}/join`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers,
+    });
+    const joinBody = await joined.text();
+    assert.equal(
+      joined.status,
+      200,
+      `API room ${attempt}: fresh companion join for ${room.code} failed: ${joinBody}`,
+    );
+    assert.match(JSON.parse(joinBody).companion_token, /^[A-Z0-9]{32}$/, `API room ${attempt}: invalid companion token`);
+  }
+}
+
+await verifyFreshApiRooms();
+
 const browser = await chromium.launch({ headless: true });
 let completed = 0;
 
@@ -67,4 +102,4 @@ try {
   await browser.close();
 }
 
-console.log(`live relay regression passed: ${completed}/${rounds} fresh desktop-host + 390px-companion rounds at ${baseURL}`);
+console.log(`live relay regression passed: ${rounds}/${rounds} fresh API create→join checks and ${completed}/${rounds} fresh desktop-host + 390px-companion WebSocket rounds at ${baseURL}`);

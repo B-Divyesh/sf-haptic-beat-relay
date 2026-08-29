@@ -30,11 +30,6 @@ az containerapp revision set-mode \
   --name sf-haptic-beat-relay \
   --mode single
 
-az containerapp ingress update \
-  --resource-group sociobot \
-  --name sf-haptic-beat-relay \
-  --transport http
-
 az containerapp update \
   --resource-group sociobot \
   --name sf-haptic-beat-relay \
@@ -42,6 +37,16 @@ az containerapp update \
   --revision-suffix "r$short_revision" \
   --min-replicas 1 \
   --max-replicas 1
+
+# `containerapp update` creates the revision and can restore the platform
+# ingress default. Apply HTTP *after* that rollout so the configuration that
+# routes the new revision is the one we subsequently inspect. This matters for
+# this relay because a WebSocket upgrade and its room API calls must reach the
+# same single process.
+az containerapp ingress update \
+  --resource-group sociobot \
+  --name sf-haptic-beat-relay \
+  --transport http
 
 actual_mode="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.activeRevisionsMode' --output tsv)"
 actual_min="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.template.scale.minReplicas' --output tsv)"
@@ -69,3 +74,9 @@ if [ "$actual_mode" != "Single" ] || [ "$actual_min" != "1" ] || [ "$actual_max"
 fi
 
 echo "Relay deployment contract verified: revision=$active_revision, one active/running replica, HTTP ingress."
+
+# Azure's resource view proves the topology. The live checks then prove that
+# independently routed HTTP create/join calls and WebSocket upgrades actually
+# share that one process before this deployment is accepted.
+RELAY_EXPECTED_SHA="$revision" npm run test:live-topology
+RELAY_ROUNDS="${RELAY_ROUNDS:-30}" npm run test:live-relay

@@ -42,4 +42,22 @@ assert.match(deployScript, /active_max=.*revision show/, 'deployment must verify
 assert.match(deployScript, /running_replicas=.*replica list/, 'deployment must wait for exactly one running active replica');
 assert.match(deployScript, /tr '\[:upper:\]' '\[:lower:\]'/, 'deployment must normalize Azure ingress transport casing before verification');
 
-console.log('deployment contract ok: one active revision, min/max replicas 1, HTTP ingress');
+const imageRollout = deployScript.indexOf('az containerapp update');
+const ingressAfterRollout = deployScript.indexOf('az containerapp ingress update', imageRollout);
+assert.ok(imageRollout >= 0, 'deployment must roll out the image');
+assert.ok(
+  ingressAfterRollout > imageRollout,
+  'deployment must apply HTTP ingress after the image rollout so a revision update cannot restore Azure\'s Auto transport default',
+);
+assert.match(
+  deployScript,
+  /RELAY_EXPECTED_SHA="\$revision" npm run test:live-topology/,
+  'deployment must verify the live topology and deployed build identity after rollout',
+);
+assert.match(
+  deployScript,
+  /RELAY_ROUNDS="\$\{RELAY_ROUNDS:-30\}" npm run test:live-relay/,
+  'deployment must run repeated fresh-room HTTP and WebSocket checks after rollout',
+);
+
+console.log('deployment contract ok: one active revision, min/max replicas 1, HTTP ingress reapplied after rollout and live-checked');
