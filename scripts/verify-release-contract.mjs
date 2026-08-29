@@ -89,6 +89,16 @@ assert.match(
   /RELAY_RATE_REPETITIONS="\$\{RELAY_RATE_REPETITIONS:-5\}" npm run test:live-rate-limit/,
   'deployment must run five fresh-client rate-limit bursts after rollout',
 );
+assert.match(
+  deployScript,
+  /stability_seconds="\$\{RELAY_DEPLOY_STABILITY_SECONDS:-60\}"/,
+  'deployment must leave a reconciliation window before its final success gate',
+);
+assert.equal(
+  deployScript.split('RELAY_EXPECTED_SHA="$revision" npm run test:live-topology').length - 1,
+  2,
+  'deployment must verify topology and immutable identity both before and after all live functional gates',
+);
 
 const topologyChecker = readFileSync(new URL('./verify-live-topology.mjs', import.meta.url), 'utf8');
 assert.match(

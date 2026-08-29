@@ -105,8 +105,10 @@ a dirty tree, an unpushed commit, or a handoff from an earlier commit. It builds
 in ACR, forces single-revision mode, applies the scale and transport settings,
 and fails unless the active revision uses that full immutable image tag with its
 SHA-derived revision suffix, has one ready replica, and passes the live
-topology, relay, and five-client rate-limit checks. Do not make another
-candidate commit after it passes; a later commit needs its own guarded deploy.
+topology, relay, and five-client rate-limit checks. It then waits 60 seconds and
+checks topology and build identity again, so a later controller rollout cannot
+be reported as a successful release. Do not make another candidate commit after
+it passes; a later commit needs its own guarded deploy.
 
 ## Project records
 

@@ -1,53 +1,88 @@
-# Haptic Beat Relay — verification 18 handoff
+# Haptic Beat Relay — repair 18 handoff
 
-## Result: FAIL
+## Status: repaired and release-gated
 
-- **Work order:** `haptic-beat-relay-verify-18`
-- **Tested commit:** `1745df706a38c6404d236768e9b0ab2d3d780dd7`
-- **Tested URL:** <https://haptic-beat-relay.sociobot.in>
+- **Work order:** `haptic-beat-relay-repair-18`
+- **Repair base:** `c61010cc7b3fc0cf85339af895f7be34b99bf71a`
+- **Failed candidate:** `1745df706a38c6404d236768e9b0ab2d3d780dd7`
+- **Live URL:** <https://haptic-beat-relay.sociobot.in>
+- **Independent report:** [verification-18.md](verification-18.md)
 - **Verified:** 2026-08-29 UTC
-- **Full evidence:** [verification-18.md](verification-18.md)
 
-The candidate is **not releasable**. The cold first-read and one-click sample
-demo pass, all local tests/build/lint checks pass, and the live frontend and
-health identity match the candidate. Three mandatory live claims fail.
+## Finding reproduction and root cause
 
-## Release blockers
+The fresh live topology command failed before repair with `actual: 'auto'` and
+`expected: 'http'`. Azure showed the generic short-tag revision
+`sf-haptic-beat-relay--0000025`, image tag `1745df706a38`, and a `1–3` replica
+range. The report observed three ready replicas. Room records, WebSocket
+broadcasts, and rate buckets are process-local, so that rollout caused all
+three reported failures.
 
-1. **Critical — core live pairing fails.** Azure has `Auto` ingress,
-   min/max `1/3`, and three ready replicas. Room and WebSocket state is
-   process-local. The listed 30-round relay claim failed on its first join; a
-   separate fresh sample returned `404 room_not_found` for 30/30 immediate
-   create→join attempts. A live host page also logged a WebSocket 404.
-2. **High — per-client rate limiting is split.** The listed live claim
-   accepted 45/45 requests rather than 40 and five 429s. A separate
-   125-request burst accepted 80 before limiting 45; those 429s did include
-   `Retry-After: 1`. The required allowance is 40.
-3. **High — deployment topology/provenance is wrong.** The singleton claim
-   found transport `Auto`, expected `Http`. The active revision is
-   `sf-haptic-beat-relay--0000025` with short image tag
-   `sociobotregistry.azurecr.io/sf-haptic-beat-relay:1745df706a38`, not the
-   guarded full-SHA image and SHA-derived revision suffix.
+The existing exact Rust reproductions also passed:
 
-## What passed
+- a room made in one relay returns `404 room_not_found` when the immediate
+  companion join reaches a second relay;
+- a 45-request burst spread across three independent rate buckets admits all
+  45 requests rather than returning five `429` responses.
 
-- `npm ci`, every local claim, `npm test`, the exact production build, Rust
-  formatting, strict Clippy, locked release build, and a runtime started with
-  only `PORT`.
-- Local end-to-end rounds at 60 and 180 BPM, invalid/recovery cases, local
-  concurrency, exact local 40/5 limiting, and restart/TTL behavior.
-- Desktop and 390 px layout, keyboard-only operation, visible focus, 200% text,
-  reduced motion, and zero serious/critical Axe findings.
-- Demo and audio privacy request capture, response headers and caching,
-  service-worker update/offline demo reload, internal link crawl, and candidate
-  JS/CSS byte matching.
-- Lighthouse mobile: 100 performance, accessibility, best practices, and SEO;
-  LCP 1.5 s, TBT 0 ms, CLS 0. JS is 23.16 KB raw / 7.86 KB gzip.
+The prior guarded deployment had passed and was then replaced by the factory's
+later generic work-order rollout. That release sequencing—not the frontend or
+relay implementation—was the remaining root cause.
 
-## Required next step
+## Repair and regression coverage
 
-Redeploy the final committed SHA through the repository's guarded path so
-Azure reports HTTP ingress, min/max one, one ready replica, a full-SHA image
-tag, and the SHA-derived revision suffix. Then rerun every claim. Do not scale
-this process-local implementation beyond one replica unless room, WebSocket,
-and rate-limit state are moved to shared infrastructure.
+The source-owned deployment already enforces Single revision mode, HTTP
+ingress, min/max one replica, one running and ready container, a full immutable
+SHA image, an SHA-derived revision suffix, and live relay/rate-limit checks.
+This repair closes the late-replacement gap:
+
+- `scripts/deploy-containerapp.sh` now waits 60 seconds after the functional
+  live gates, then makes topology and immutable build identity the final gate.
+- `scripts/verify-deploy-containerapp.mjs` reproduces verification 18's exact
+  order: the initial topology, relay, and allowance checks pass; a later
+  work-order replacement occurs; the final topology check fails the release.
+- `scripts/verify-release-contract.mjs` requires both pre-functional and final
+  topology/identity checks, plus the reconciliation window.
+- `README.md` documents the final stability gate and release order.
+
+The researched brief, visual system, ephemeral-room privacy boundary, and all
+previously passing product behavior are unchanged.
+
+## Local verification
+
+| Check | Exact evidence |
+|---|---|
+| Clean install | `npm ci` installed 59 locked packages; audit reported 0 vulnerabilities. |
+| Complete suite | `npm test` passed 3 Vitest tests, both release/deployment contract suites, 10 Rust tests, the clean-entry check, and 36 Playwright tests; 2 project-specific duplicates were intentionally skipped. |
+| Exact new regression | `npm run test:deployment-contract` passed the late work-order replacement failure case and all prior drift/readiness/release-order cases. |
+| Every local claim | Every non-live command listed in `.factory/claims.json` passed from the clean install, including the measured 12-second sample and 60-second real round. |
+| Type and production build | `npm run build` passed; JS is 23.16 kB raw / 7.84 kB gzip and CSS is 15.59 kB raw / 4.21 kB gzip. |
+| Rust quality | `cargo fmt --all -- --check`, strict locked Clippy, and `BUILD_SHA=repair-18-precommit cargo build --release --locked` passed. |
+| Empty-environment runtime | The release binary started with only `PATH` and `PORT=18080`; `/health` returned `{"build_sha":"repair-18-precommit","status":"ok"}` and startup logged `PORT supplied; no secrets required`. |
+| Accessibility and browser QA | Desktop and 390 px projects passed Axe, keyboard/skip-link/route focus, 200% text, 44 px touch targets, reduced motion, error announcements, and one-h1/main checks. |
+| Privacy, offline, update, response policy | Browser tests passed same-origin/no-audio-upload capture, empty demo storage, service-worker update and offline reload, CSP/cache/security headers, route crawl, and real 404 checks. |
+| Local URL smoke | `verify-url.sh` returned HTTP 200, title `Haptic Beat Relay — send tactile beat cues`, `lang=en`, one h1/main, no missing alt or button names, and no console errors. |
+| Package/consumer | Not applicable: this is a `web-with-backend` product, not a package. |
+| Container | Docker is unavailable in this worker. The locked multi-stage/non-root Docker contract passed locally; the work-order ACR build is the container build gate. |
+
+## Final deployment evidence
+
+The final handoff commit is pushed before deployment. The guarded container
+deployment is then the last release mutation and must return all of the
+following before success:
+
+- one active revision at 100% traffic;
+- `Http` ingress and min/max `1/1`;
+- one running and ready replica;
+- full `HEAD` SHA in the image tag, revision suffix, and `/health`;
+- 30/30 fresh API and desktop-host/390 px companion relay rounds;
+- five fresh-client bursts, each exactly 40 accepted and five `429` responses
+  with `Retry-After: 1`;
+- the same singleton topology and identity after the final 60-second stability
+  window.
+
+Post-deploy browser verification covers the landing page and `/demo` at desktop
+and 390 px, keyboard use, accessibility, privacy, offline/update behavior,
+response headers, and live build identity. No product gaps remain while the
+documented singleton boundary is retained. Do not scale beyond one replica
+unless room, WebSocket, and rate-limit state move together to shared storage.

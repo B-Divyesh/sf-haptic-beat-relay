@@ -121,3 +121,21 @@ echo "Relay deployment contract verified: revision=$active_revision, one active,
 RELAY_EXPECTED_SHA="$revision" npm run test:live-topology
 RELAY_ROUNDS="${RELAY_ROUNDS:-30}" npm run test:live-relay
 RELAY_RATE_REPETITIONS="${RELAY_RATE_REPETITIONS:-5}" npm run test:live-rate-limit
+
+# A release is not stable if another controller replaces the guarded revision
+# as soon as the functional checks finish. Verification 18 found exactly that:
+# the prior release passed here, then a generic work-order rollout restored
+# Auto ingress and a 1-3 replica range. Leave a short reconciliation window and
+# make topology plus immutable build identity the final success gate.
+stability_seconds="${RELAY_DEPLOY_STABILITY_SECONDS:-60}"
+case "$stability_seconds" in
+  *[!0-9]* | '')
+    echo "RELAY_DEPLOY_STABILITY_SECONDS must be a non-negative integer, got: $stability_seconds" >&2
+    exit 2
+    ;;
+esac
+if [ "$stability_seconds" -gt 0 ]; then
+  echo "Waiting ${stability_seconds}s before the final deployment stability check."
+  sleep "$stability_seconds"
+fi
+RELAY_EXPECTED_SHA="$revision" npm run test:live-topology

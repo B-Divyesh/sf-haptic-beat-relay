@@ -10,6 +10,7 @@ const tempDirectory = mkdtempSync(join(tmpdir(), 'haptic-beat-relay-deploy-contr
 const fakeBin = join(tempDirectory, 'bin');
 const commandLog = join(tempDirectory, 'commands.log');
 const npmLog = join(tempDirectory, 'npm.log');
+const npmState = join(tempDirectory, 'npm-state');
 const revision = '0123456789abcdef0123456789abcdef01234567';
 
 try {
@@ -49,6 +50,16 @@ esac
   writeFileSync(fakeNpm, `#!/usr/bin/env sh
 set -eu
 printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELAY_RATE_REPETITIONS:-}" "$*" >> "$RELAY_DEPLOY_NPM_LOG"
+if [ "$*" = "run test:live-topology" ]; then
+  count=0
+  [ ! -f "$RELAY_DEPLOY_NPM_STATE" ] || count="$(cat "$RELAY_DEPLOY_NPM_STATE")"
+  count=$((count + 1))
+  printf '%s\\n' "$count" > "$RELAY_DEPLOY_NPM_STATE"
+  if [ "\${RELAY_FAKE_LATE_REPLACEMENT:-0}" = "1" ] && [ "$count" = "2" ]; then
+    echo "late work-order rollout replaced the guarded revision" >&2
+    exit 1
+  fi
+fi
 `, 'utf8');
   writeFileSync(fakeSleep, '#!/usr/bin/env sh\nexit 0\n', 'utf8');
   chmodSync(fakeAz, 0o755);
@@ -64,7 +75,9 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       PATH: `${fakeBin}:${process.env.PATH}`,
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_NPM_STATE: npmState,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
+      RELAY_DEPLOY_STABILITY_SECONDS: '0',
       RELAY_ROUNDS: '1',
     },
   });
@@ -100,8 +113,43 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       `${revision}|1||run test:live-topology`,
       `|1||run test:live-relay`,
       `|1|5|run test:live-rate-limit`,
+      `${revision}|1||run test:live-topology`,
     ],
-    'a successful deployment must run the topology identity, repeated relay, and five-fresh-client rate-limit gates',
+    'a successful deployment must finish with a second topology and identity check after the functional gates',
+  );
+
+  // Reproduce verification 18's release-sequencing failure: the guarded
+  // candidate passed its first live gates, then the generic work-order deploy
+  // replaced it. The deploy command must not report success when its final
+  // topology/identity check observes that late replacement.
+  const lateNpmState = join(tempDirectory, 'late-npm-state');
+  const lateNpmLog = join(tempDirectory, 'late-npm.log');
+  const lateReplacement = spawnSync('sh', [deployScript, revision], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      RELAY_DEPLOY_COMMAND_LOG: commandLog,
+      RELAY_DEPLOY_NPM_LOG: lateNpmLog,
+      RELAY_DEPLOY_NPM_STATE: lateNpmState,
+      RELAY_DEPLOY_EXPECTED_REVISION: revision,
+      RELAY_DEPLOY_STABILITY_SECONDS: '0',
+      RELAY_FAKE_LATE_REPLACEMENT: '1',
+      RELAY_ROUNDS: '1',
+    },
+  });
+  assert.equal(lateReplacement.status, 1, 'a late replacement after the functional gates must block release');
+  assert.match(lateReplacement.stderr, /late work-order rollout replaced the guarded revision/);
+  assert.deepEqual(
+    readFileSync(lateNpmLog, 'utf8').trim().split('\n'),
+    [
+      `${revision}|1||run test:live-topology`,
+      `|1||run test:live-relay`,
+      `|1|5|run test:live-rate-limit`,
+      `${revision}|1||run test:live-topology`,
+    ],
+    'the exact late-replacement regression must reach and fail the final topology gate',
   );
 
   // Reproduce verification 17's exact release blocker in the deployment
@@ -117,7 +165,9 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       PATH: `${fakeBin}:${process.env.PATH}`,
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_NPM_STATE: npmState,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
+      RELAY_DEPLOY_STABILITY_SECONDS: '0',
       RELAY_FAKE_TRANSPORT: 'Auto',
       RELAY_FAKE_MAX_REPLICAS: '3',
       RELAY_FAKE_RUNNING_REPLICAS: '3',
@@ -144,7 +194,9 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       PATH: `${fakeBin}:${process.env.PATH}`,
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_NPM_STATE: npmState,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
+      RELAY_DEPLOY_STABILITY_SECONDS: '0',
       RELAY_FAKE_READY_REPLICAS: '0',
     },
   });
@@ -181,7 +233,9 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
         PATH: `${fakeBin}:${process.env.PATH}`,
         RELAY_DEPLOY_COMMAND_LOG: commandLog,
         RELAY_DEPLOY_NPM_LOG: npmLog,
+        RELAY_DEPLOY_NPM_STATE: npmState,
         RELAY_DEPLOY_EXPECTED_REVISION: revision,
+        RELAY_DEPLOY_STABILITY_SECONDS: '0',
         ...releaseState.env,
       },
     });
@@ -203,7 +257,9 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       PATH: `${fakeBin}:${process.env.PATH}`,
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_NPM_STATE: npmState,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
+      RELAY_DEPLOY_STABILITY_SECONDS: '0',
     },
   });
   assert.equal(mismatch.status, 2, 'a release identity different from HEAD must be rejected before deployment');
