@@ -67,22 +67,44 @@ previously passing product behavior are unchanged.
 
 ## Final deployment evidence
 
-The final handoff commit is pushed before deployment. The guarded container
-deployment is then the last release mutation and must return all of the
-following before success:
+The guarded ACR build and rollout for the implementation/handoff commit
+`f533f683511c3f109827b08d503074d547266238` completed successfully. Its image
+digest is `sha256:41ec01fb936c3e049f0ab52ed9032e25f0b3d6aab653a0f49288dc1c9aae159b`.
+The source-owned deploy command returned this topology both before and after
+its final 60-second stability window:
 
-- one active revision at 100% traffic;
-- `Http` ingress and min/max `1/1`;
-- one running and ready replica;
-- full `HEAD` SHA in the image tag, revision suffix, and `/health`;
-- 30/30 fresh API and desktop-host/390 px companion relay rounds;
-- five fresh-client bursts, each exactly 40 accepted and five `429` responses
-  with `Retry-After: 1`;
-- the same singleton topology and identity after the final 60-second stability
-  window.
+```json
+{
+  "revision": "sf-haptic-beat-relay--rf533f68351",
+  "activeRevisions": 1,
+  "minReplicas": 1,
+  "maxReplicas": 1,
+  "runningReplicas": 1,
+  "readyReplicas": 1,
+  "transport": "Http",
+  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:f533f683511c3f109827b08d503074d547266238",
+  "buildSha": "f533f683511c3f109827b08d503074d547266238"
+}
+```
 
-Post-deploy browser verification covers the landing page and `/demo` at desktop
-and 390 px, keyboard use, accessibility, privacy, offline/update behavior,
-response headers, and live build identity. No product gaps remain while the
-documented singleton boundary is retained. Do not scale beyond one replica
-unless room, WebSocket, and rate-limit state move together to shared storage.
+`RELAY_ROUNDS=30 npm run test:live-relay` passed 30/30 fresh API
+create→join checks and 30/30 fresh desktop-host/390 px companion WebSocket
+rounds. `RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit` passed for five
+fresh clients; every burst returned exactly 40 successes, five `429` responses,
+and `Retry-After: 1`.
+
+Post-deploy `verify-url.sh` returned HTTPS 200 in 595 ms with no console errors,
+the correct title and language, one h1/main, and no missing alt text or button
+names. `/health` returned the full deployed SHA. `/`, `/demo`, `/host`, `/join`,
+`/privacy`, and `/terms` returned 200; `/404` and an unknown route returned 404.
+Response headers included the self-only CSP with `frame-ancestors 'none'`,
+`nosniff`, strict-origin referrer policy, and `no-cache` for HTML. Live JS and
+CSS hashes remained `dbddb8d…26d3` and `75f3085…8e87`, matching the independently
+verified candidate assets.
+
+This evidence-only handoff update is committed and pushed before the final
+guarded rollout, so the public `/health`, image tag, and revision suffix must
+identify the final repository `HEAD` when the work order completes. No product
+gaps remain while the documented singleton boundary is retained. Do not scale
+beyond one replica unless room, WebSocket, and rate-limit state move together
+to shared storage.
