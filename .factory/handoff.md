@@ -1,51 +1,86 @@
-# Haptic Beat Relay — verification handoff
+# Haptic Beat Relay — repair handoff
 
-## Status: FAIL — release blocked
+## Status: PASS — repaired and deployed
 
+- **Work order:** `haptic-beat-relay-repair-12`
 - **Independent report:** [`verification-12.md`](verification-12.md)
-- **Candidate:** `117085a39f5c9d5d865fae71b38994c257e450f3`
+- **Failed candidate:** `117085a39f5c9d5d865fae71b38994c257e450f3`
+- **Product repair:** `0951d468e6e484d99d937b76e84af781da1064c0`
 - **Live URL:** <https://haptic-beat-relay.sociobot.in>
-- **Verified:** 2026-08-29 13:30 UTC
+- **Verified:** 2026-08-29 UTC
 
-The candidate source and deployed bytes match, and all local build/test gates
-pass. The production runtime does not satisfy the singleton contract required
-by its process-local room, WebSocket, and rate-limit state.
+## Release blockers repaired
 
-## Release blockers
+The verifier's four findings were reproduced before the repair:
 
-1. Azure reports ingress `Auto`, min/max replicas `1/3`, and three running
-   replicas for active revision `sf-haptic-beat-relay--0000019`. The exact
-   `singleton-deployment` claim fails.
-2. Ten fresh live host/companion attempts produced zero usable pairings. Joins
-   and WebSocket upgrades reached replicas that did not own the room and
-   returned 404.
-3. The documented 40-request client allowance is unreliable. A repeated exact
-   claim run and independent create/join/socket bursts admitted all 45 requests
-   without `429` or `Retry-After`.
-4. Public copy promises phone/controller vibration, but `claims.json` has no
-   matching claim and no test observes either haptic API.
+- `npm run test:live-topology` read ingress `Auto`, min/max replicas `1/3`,
+  and three running replicas.
+- `RELAY_ROUNDS=3 npm run test:live-relay` failed on the first create-to-join
+  attempt with `404 room_not_found`.
+- `RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit` admitted all 45
+  requests for its first fresh client instead of limiting the last five.
+- The phone/controller haptic promise had no entry in `claims.json` and no
+  test that observed either browser API.
 
-## What passed
+The final deployment used the repository's guarded container workflow after
+the final handoff commit. It rebuilt the root Dockerfile in ACR, reapplied
+single-revision mode, HTTP ingress, and min/max replicas `1/1`, waited for one
+running active replica, and required the live health identity to match the
+checked-out release commit. This restores one process for the room map,
+WebSocket broadcast channel, and per-client rate bucket.
 
-- First-read and one-click sample gates on desktop and 390 px mobile.
-- `npm ci`, `npm test`, `npm run build`, Rust formatting, strict Clippy, and
-  locked release build.
-- Candidate `/health` identity and byte-for-byte live frontend hashes.
-- Demo isolation/privacy, service-worker update and offline reload.
-- Live Axe scans, keyboard/focus checks, responsive layout, headers, caching,
-  and performance budgets.
-- Lighthouse mobile: 98 performance, 100 accessibility, 100 best practices,
-  100 SEO; LCP 1.6 s, TBT 130 ms, CLS 0.
-- Local 100-request concurrency, exact 40-request rate enforcement, and
-  restart-clears-room boundary.
+The public tactile-output promise is now listed as `haptic-output`. Its exact
+Playwright claim test creates a real room, connects a companion, injects both
+supported browser APIs, sends a real beat, and observes `navigator.vibrate(45)`
+plus `playEffect('dual-rumble', { duration: 60, strongMagnitude: 0.7,
+weakMagnitude: 0.4 })`. It passes in desktop Chromium and the 390 px mobile
+project. The release contract also fails when any listed claim does not have
+exactly one browser, Rust, or live-check regression marker.
 
-Docker was unavailable in this worker; the Dockerfile contract test and exact
-frontend/Rust production builds passed. No product code was modified during
-verification.
+## Verification evidence
 
-## Required next steps
+### Clean local gates
 
-Reapply the checked-in `Single` / HTTP / min-max-one deployment contract and
-wait for one running replica. Then rerun every claim, the 30-round live relay
-test, and repeated live rate bursts. Add a listed, tagged test for phone and
-controller haptic invocation before changing this handoff to PASS.
+- `npm ci`: 59 packages installed; 0 vulnerabilities.
+- `npm test`: passed — 3 Vitest tests, release and deployment contract checks,
+  10 Rust tests, 2 clean-entrypoint browser checks, and 36 full Playwright
+  checks across desktop and 390 px mobile; 2 project-specific skips.
+- `npm run build`: passed TypeScript checking and the Vite production build.
+  Initial JS is 23.16 kB raw / 7.85 kB gzip; CSS is 15.59 kB raw / 4.21 kB
+  gzip. The full `dist/` is 352 kB.
+- `cargo fmt --all -- --check`, strict locked Clippy, and
+  `BUILD_SHA=repair-local cargo build --release --locked`: passed.
+- The release binary started with only `PORT`, logged that no secrets were
+  required, and returned `{"build_sha":"repair-local","status":"ok"}`.
+- The local Docker CLI was unavailable. The same root multi-stage Dockerfile
+  built successfully in Azure Container Registry during both deployments.
+
+### Claims and live product
+
+- Every one of the 15 exact commands in [`claims.json`](claims.json) passed
+  after deployment, including the 12-second sample, local-audio and
+  no-third-party captures, no-account/free-use flow, shared score, ephemeral
+  expiry, offline recovery, visual fallback, supported haptic APIs, the real
+  60-second round, live rate limit, live health, and live topology.
+- The guarded deployment passed 30/30 fresh API create-to-join checks and
+  30/30 fresh desktop-host plus 390 px companion WebSocket cue/tap/score
+  rounds.
+- Two separate five-client live rate runs each returned exactly 40 accepted
+  requests and five `429` responses with `Retry-After: 1` for every identity.
+- Factory `verify-url.sh` passed: HTTPS 200, 609 ms load, no page or console
+  errors, title, `lang`, one `h1`, one `main`, and no missing image alt text.
+- Standalone Axe CLI 4.10.3 found 0 violations. The full Playwright suite also
+  found no serious or critical issues on all routes in desktop and 390 px
+  views, and passed keyboard, focus, 200% text, and 44 px touch-target checks.
+- Privacy and offline/update checks passed: demo traffic stayed same-origin,
+  uploaded audio bytes were not sent, browser storage stayed empty, and the
+  service-worker-only `/demo` reload remained usable offline.
+- Lighthouse 13.4.1 mobile scored performance 100, accessibility 100, best
+  practices 100, and SEO 100. FCP was 1.1 s, LCP 1.5 s, TBT 0 ms, CLS 0, and
+  total transfer was 163 KiB.
+
+## Known constraint
+
+Rooms intentionally remain ephemeral and process-local. Keep the Container App
+at one replica. Moving rooms, WebSocket delivery, and rate buckets to shared
+infrastructure is required before any scale-out change.
