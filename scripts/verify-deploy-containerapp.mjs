@@ -92,10 +92,10 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
     'a successful deployment must run the topology identity, repeated relay, and five-fresh-client rate-limit gates',
   );
 
-  // Reproduce verification 13's exact release blocker in the deployment
-  // harness: a generic rollout restored Auto ingress and a 1-3 replica range,
-  // then three processes split room and rate-limit state. The source-owned
-  // path must stop before any live success gate can run in that topology.
+  // Reproduce verification 14's exact release blocker in the deployment
+  // harness: the controller rollout restored Auto ingress and a 1-3 replica
+  // range, then three processes split room and rate-limit state. The
+  // source-owned path must stop before any live success gate can run.
   const npmBeforeDrift = readFileSync(npmLog, 'utf8');
   const drift = spawnSync('sh', [deployScript, revision], {
     cwd: root,

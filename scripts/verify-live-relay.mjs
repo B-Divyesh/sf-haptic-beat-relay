@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 
+// @claim:live-relay
+
 const baseURL = (process.env.RELAY_BASE_URL ?? 'https://haptic-beat-relay.sociobot.in').replace(/\/$/, '');
 const rounds = Number.parseInt(process.env.RELAY_ROUNDS ?? '30', 10);
 

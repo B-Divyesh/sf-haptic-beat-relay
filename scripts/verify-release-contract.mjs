@@ -75,6 +75,7 @@ const claims = JSON.parse(readFileSync(new URL('../.factory/claims.json', import
 const claimSources = [
   readFileSync(new URL('../tests/browser/product.spec.ts', import.meta.url), 'utf8'),
   readFileSync(new URL('../src/lib.rs', import.meta.url), 'utf8'),
+  readFileSync(new URL('./verify-live-relay.mjs', import.meta.url), 'utf8'),
   readFileSync(new URL('./verify-live-rate-limit.mjs', import.meta.url), 'utf8'),
   readFileSync(new URL('./verify-live-topology.mjs', import.meta.url), 'utf8'),
 ].join('\n');

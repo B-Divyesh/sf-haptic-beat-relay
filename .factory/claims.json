@@ -49,6 +49,13 @@
     "sandbox": "two fresh browser contexts; create and join one room, start a round, receive a cue, return a tap, and see the same scored result"
   },
   {
+    "id": "live-relay",
+    "claim": "The deployed relay keeps fresh host and companion room, cue, tap, and score traffic connected.",
+    "where": "README live verification and deployment sections",
+    "test": "RELAY_ROUNDS=30 npm run test:live-relay",
+    "sandbox": "30 fresh API rooms plus 30 fresh desktop-host and 390 px companion browser pairs against the live deployment; assert create, join, WebSocket cue, returned tap, shared score, and no browser errors"
+  },
+  {
     "id": "ephemeral-rooms",
     "claim": "Room state stays in memory for up to two hours and disappears on restart.",
     "where": "landing limits, privacy, README",

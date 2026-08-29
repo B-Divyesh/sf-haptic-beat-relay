@@ -1,0 +1,36 @@
+{
+  "observed_at_utc": "2026-08-29T16:10:15Z",
+  "candidate": "c49a4ae3ad2dfd30188ac6e3be4e5ecc596aec8f",
+  "container_app": {
+    "revision": "sf-haptic-beat-relay--0000021",
+    "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:c49a4ae3ad2d",
+    "active_revisions": 1,
+    "traffic_weight": 100,
+    "ingress_transport": "Auto",
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "running_replicas": 3
+  },
+  "topology_test": {
+    "result": "fail",
+    "actual_transport": "auto",
+    "expected_transport": "http"
+  },
+  "relay_test": {
+    "result": "fail",
+    "room": "MMAAK2",
+    "join_status": 404,
+    "body": {
+      "error": "room_not_found",
+      "message": "That room is not open. Check the code with the host."
+    }
+  },
+  "rate_limit_test": {
+    "result": "fail",
+    "client": "198.51.100.144",
+    "requests": 45,
+    "accepted": 45,
+    "expected_accepted": 40,
+    "expected_limited": 5
+  }
+}

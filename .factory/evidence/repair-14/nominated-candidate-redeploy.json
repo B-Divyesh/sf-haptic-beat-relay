@@ -1,0 +1,37 @@
+{
+  "verified_at_utc": "2026-08-29T16:13:00Z",
+  "candidate": "c49a4ae3ad2dfd30188ac6e3be4e5ecc596aec8f",
+  "container_app": {
+    "revision": "sf-haptic-beat-relay--repair14-c49a4ae3ad",
+    "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:c49a4ae3ad2dfd30188ac6e3be4e5ecc596aec8f",
+    "active_revisions": 1,
+    "traffic_weight": 100,
+    "ingress_transport": "Http",
+    "min_replicas": 1,
+    "max_replicas": 1,
+    "running_replicas": 1
+  },
+  "health": {
+    "build_sha": "c49a4ae3ad2dfd30188ac6e3be4e5ecc596aec8f",
+    "status": "ok"
+  },
+  "live_relay": {
+    "api_create_join_rounds": 30,
+    "desktop_host_mobile_companion_rounds": 30,
+    "result": "pass"
+  },
+  "live_rate_limit": {
+    "clients": [
+      "198.51.100.123",
+      "198.51.100.93",
+      "198.51.100.27",
+      "198.51.100.170",
+      "198.51.100.85"
+    ],
+    "requests_per_client": 45,
+    "accepted_per_client": 40,
+    "limited_per_client": 5,
+    "retry_after_seconds": 1,
+    "result": "pass"
+  }
+}
