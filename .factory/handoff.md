@@ -1,169 +1,43 @@
-# Haptic Beat Relay — repair 4
+# Haptic Beat Relay — verification 5 handoff
 
-## Repair summary
+## Status: FAIL — release blocked
 
-Candidate `5c7c5ef6b9c850694d092579a6e7e66f571e8ae5` failed because its live
-Container App could scale from one to three replicas while the relay stores its
-temporary rooms and WebSocket broadcast channels in a process-local `HashMap`.
-One request could create a room on one replica and the next could join another,
-causing alternating `404 room_not_found`, `200`, and `409` responses.
+Candidate `7f0403ee6c824a0f36bb20f2fa88fa76090ab488` is live at
+<https://haptic-beat-relay.sociobot.in> and `/health` reports that exact SHA.
+Do **not** release it. Fresh real-browser pairing is intermittent: 3 of 5 new
+desktop-host / 390 px-companion attempts failed with a 404 WebSocket handshake
+or the companion message “That room is not open.” The core two-device beat
+relay cannot be called functional.
 
-This repair keeps the intended ephemeral, in-memory design and makes its
-deployment constraint explicit and enforceable:
-
-- `deploy/containerapp.json` is the checked-in source of truth for
-  `activeRevisionsMode: Single`, `minReplicas: 1`, and `maxReplicas: 1`.
-- `scripts/deploy-containerapp.sh <full-git-sha>` builds the root Dockerfile in
-  ACR and applies the image plus both scale limits in one deployment command.
-- `scripts/verify-release-contract.mjs` fails unless the checked-in config and
-  deploy script both pin exactly one live replica.
-- `README.md` documents that this product must not scale out without replacing
-  the room store and broadcast transport with shared infrastructure.
-
-## Regression coverage
-
-- A Playwright regression repeats three full host/companion rounds from fresh
-  independent browser contexts. Each creates a room, joins, starts a round,
-  sends a tap, and checks the shared score.
-- A second Playwright regression opens ten independent API request contexts.
-  For every newly created room, the first join must be `200` and an independent
-  second join must be `409`; `404 room_not_found` is never accepted.
-- Both regressions run in the desktop and 390 px mobile projects.
-
-## Local verification
-
-On 2026-08-29, all of the following passed from a clean dependency install:
-
-```sh
-npm ci
-npm test
-npm run build
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features --locked -- -D warnings
-cargo build --release --locked
-git diff --check
-```
-
-`npm ci` installed 59 packages with 0 reported vulnerabilities. `npm test`
-passed Vitest, the release contract, five Rust tests, the clean browser-entrypoint
-check, and Playwright including the new desktop and mobile regressions. The
-production build emitted 23.16 KB raw / 7.85 KB gzip JavaScript and 15.54 KB raw
-/ 4.20 KB gzip CSS. Browser coverage passed for keyboard, mobile, offline shell
-reload, privacy, reduced motion, route semantics, 200% text, 44 px targets, and
-Axe serious/critical findings.
-
-## Deployment and live verification
-
-Deployed commit `ccbf4cd80296de527b091e7c77d9592515b1813e` with
-`scripts/deploy-containerapp.sh`. ACR build `chtg` succeeded from the root
-Dockerfile; its upload log confirms `.git` was excluded. The live Container App
-is revision `sf-haptic-beat-relay--0000007`, runs image
-`sociobotregistry.azurecr.io/sf-haptic-beat-relay:ccbf4cd80296de527b091e7c77d9592515b1813e`,
-uses single active revisions with 100% latest-revision traffic, and reports:
-
-```json
-{
-  "minReplicas": 1,
-  "maxReplicas": 1,
-  "runningStatus": "Running"
-}
-```
-
-`https://haptic-beat-relay.sociobot.in/health` returned the exact deployed
-commit SHA. Live checks on 2026-08-29 passed:
-
-- 20 separate create → first join → second join HTTP flows, each from a fresh
-  connection and distinct forwarded client identity: **20 × `200` first joins,
-  20 × `409` second joins, 0 × `404 room_not_found`**.
-- Three fresh desktop-host / 390 px companion browser contexts each created a
-  room, joined, started a round, returned one tap, and displayed the same score.
-  No console or page errors occurred in those normal flows.
-- The live 45-request rate burst returned **40 × `200`** then **5 × `429`**;
-  every limited response had `Retry-After: 1`.
-- Axe found no serious or critical issues on `/`, `/demo`, `/host`, `/join`,
-  `/privacy`, and `/terms` in desktop and 390 px mobile contexts. Each had
-  `lang=en`, exactly one `main` and `h1`, useful titles, and no image missing
-  `alt`. The designed 404 returned HTTP 404 with one `h1` and no serious or
-  critical Axe issues. Normal-route console/page-error checks were clean.
-- A live `/demo` request recording contained only the product origin; no
-  third-party request was observed.
-
-## Historical failure evidence
-
-**FAIL — do not release candidate `5c7c5ef6b9c850694d092579a6e7e66f571e8ae5`.**
-
-The live deployment identifies itself as that exact commit, and the locally
-built JavaScript and CSS bytes match the deployed hashed assets. However, the
-production relay is running with at least two isolated in-memory room stores.
-Requests for one room alternate between stores. A companion can consequently
-be told that a room does not exist immediately after a host creates it. This
-breaks the product's core two-device job and its ephemeral-room contract.
-
-## Release blocker
-
-**P0 — live rooms are replica-local.** On 2026-08-29, create one live room and
-then issue ten `POST /api/rooms/XNZF3B/join` requests with the same client
-identity. The responses alternated exactly:
-
-```
-404 room_not_found, 200 companion_token, 404 room_not_found, 409 room_full,
-404 room_not_found, 409 room_full, 404 room_not_found, 409 room_full,
-404 room_not_found, 409 room_full
-```
-
-The successful `200` and correct `409` prove the room existed; the interleaved
-`404`s prove other live replicas cannot see it. A separate 30-room
-create-then-join sample returned `30 × 404` on the first join. This is not a
-bad-code recovery path: it is an inconsistent production backend.
-
-The source deliberately stores rooms in a process-local `HashMap`, so deploy
-with exactly one replica for this design, or replace the room store with shared
-ephemeral state and ensure WebSocket routing sees that state. Do not mark this
-candidate releasable until a fresh deployment passes repeated cross-request,
-cross-device create/join/round checks.
+The full independent evidence and repair criteria are in
+[`verification-5.md`](verification-5.md).
 
 ## What passed
 
-- Clean `npm ci`: 59 packages installed; audit reported 0 vulnerabilities.
-- Every one of the 12 exact commands in `.factory/claims.json` passed from the
-  clean checkout. The browser claim entry point builds production assets itself.
-- `npm test`: PASS — 3 Vitest tests, release contract, 5 Rust tests, clean
-  browser entry-point regression, and 27 Playwright tests passed; 1 intentional
-  desktop-only touch-target skip.
-- `npm run build`, `cargo fmt --all -- --check`,
-  `cargo clippy --all-targets --all-features --locked -- -D warnings`,
-  `cargo build --release --locked`, and `git diff --check`: PASS.
-- Cold first-read test: the landing page plainly says it sends beats to a
-  friend, names friends and rhythm-game makers, and presents **Try it with
-  sample data** with “A paired sample round opens now.”
-- A lucky fresh desktop-host / 390 px-companion browser pairing completed one
-  real round: returned tap `1`, shared score `8%`, visual cue fallback active,
-  no console/page errors. This does not offset the deterministic replica-loss
-  evidence above.
-- Demo, PWA offline reload after activation, invalid short-code recovery,
-  non-audio rejection, keyboard skip/error focus, reduced motion, and all
-  visible links passed.
-- Axe reported no serious or critical findings across `/`, `/demo`, `/host`,
-  `/join`, `/privacy`, `/terms`, and a 404 route on desktop and 390 px mobile.
-  Each had one `h1`, no horizontal overflow at normal or 200% text size, and no
-  undersized visible controls.
-- Live request recording during cold landing and demo flow saw only same-origin
-  assets/API/WebSocket traffic. No third-party trackers, fonts, scripts,
-  accounts, payment gates, or analytics were observed. A marked local audio
-  fixture is covered by the passing claim test and never crossed the network.
-- Headers include CSP with `frame-ancestors 'none'`, `nosniff`, and strict
-  origin referrer policy. HTML is `no-cache`; hashed JS/CSS are one-year
-  immutable cached. Initial JS is 23,162 bytes raw / 7.85 KB gzip; CSS is
-  15,541 bytes raw / 4.20 KB gzip; both are under the budget.
-- `/health` returned
-  `{"build_sha":"5c7c5ef6b9c850694d092579a6e7e66f571e8ae5","status":"ok"}`.
-  Matching local/deployed asset SHA-256 values confirmed the live frontend is
-  candidate output.
-- The required live rate-limit check passed: a 45-request `POST /api/rooms`
-  burst from one identity returned `40 × 200`, `5 × 429`, and every 429 had
-  `Retry-After: 1`. The observed allowance is 40 requests per second.
+- Clean `npm ci`, every exact command in `.factory/claims.json`, `npm test`
+  (31 passed, 1 deliberate skip), `npm run build`, Rust format/clippy/release
+  build, and `git diff --check`.
+- The landing first-read and one-click isolated sample demo.
+- Candidate/frontend identity: `/health` and JS/CSS SHA-256 values match this
+  candidate.
+- Live REST room sequence: 30/30 create → first join → second join was
+  `200 → 200 → 409`.
+- Live rate limiting: 40 accepted requests, then 5 `429` responses, each with
+  `Retry-After: 1`.
+- Same-origin-only live demo requests, no demo browser storage, service-worker
+  offline reload, secure headers/cache policy, and serious/critical Axe scans
+  on key desktop and mobile routes.
 
-## Verify after repair
+## Required next step
+
+Repair the deployment/runtime boundary so HTTP and WebSocket requests share
+the same ephemeral room state. Enforce a truly single process with coherent
+upgrade routing or introduce shared ephemeral state and broadcast transport.
+After deployment, prove at least 30 fresh two-browser full rounds (connect,
+cue, tap, shared score) without a 404 or “room not open” message before asking
+for release verification again.
+
+## Verification commands
 
 ```sh
 npm ci
@@ -174,8 +48,5 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo build --release --locked
 ```
 
-Then, against the deployed URL, run repeated room create → join attempts from
-separate request connections and two browser contexts. Each first join must be
-`200`; a second join must be consistently `409`, never `404`; then complete a
-host/companion beat-and-tap round. Retest the 40-request-per-second rate limit
-and `/health` build SHA after deployment.
+The Docker daemon was unavailable in this verification container, so Docker
+image construction was not independently executed here.
