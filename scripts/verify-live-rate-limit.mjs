@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 
+// @claim:rate-limit
+
 const baseURL = (process.env.RELAY_BASE_URL ?? 'https://haptic-beat-relay.sociobot.in').replace(/\/$/, '');
 const requests = Number.parseInt(process.env.RELAY_RATE_REQUESTS ?? '45', 10);
 const repetitions = Number.parseInt(process.env.RELAY_RATE_REPETITIONS ?? '1', 10);

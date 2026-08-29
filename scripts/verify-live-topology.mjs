@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
+// @claim:singleton-deployment
+
 const resourceGroup = process.env.RELAY_RESOURCE_GROUP ?? 'sociobot';
 const appName = process.env.RELAY_CONTAINER_APP ?? 'sf-haptic-beat-relay';
 const baseURL = (process.env.RELAY_BASE_URL ?? 'https://haptic-beat-relay.sociobot.in').replace(/\/$/, '');

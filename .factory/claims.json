@@ -84,6 +84,13 @@
     "sandbox": "two fresh browser contexts with vibration unavailable; relay one cue and assert the companion tap pad enters its visual cue state"
   },
   {
+    "id": "haptic-output",
+    "claim": "Each companion cue uses phone vibration and connected controller haptics when the browser supports them.",
+    "where": "landing, live companion, terms, README",
+    "test": "npm run test:browser -- --grep @claim:haptic-output",
+    "sandbox": "two fresh browser contexts; stub both haptic APIs, relay one real cue, and assert vibrate(45) plus dual-rumble actuation"
+  },
+  {
     "id": "real-round-duration",
     "claim": "A real round lasts 60 seconds.",
     "where": "host round action, README",

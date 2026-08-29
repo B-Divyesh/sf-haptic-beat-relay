@@ -70,3 +70,20 @@ assert.match(
 );
 
 console.log('deployment contract ok: one active revision, min/max replicas 1, HTTP ingress, relay, and repeated rate limits live-checked');
+
+const claims = JSON.parse(readFileSync(new URL('../.factory/claims.json', import.meta.url), 'utf8'));
+const claimSources = [
+  readFileSync(new URL('../tests/browser/product.spec.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/lib.rs', import.meta.url), 'utf8'),
+  readFileSync(new URL('./verify-live-rate-limit.mjs', import.meta.url), 'utf8'),
+  readFileSync(new URL('./verify-live-topology.mjs', import.meta.url), 'utf8'),
+].join('\n');
+for (const claim of claims) {
+  const tag = `@claim:${claim.id}`;
+  assert.equal(
+    claimSources.split(tag).length - 1,
+    1,
+    `${claim.id} must appear in exactly one browser or Rust regression test`,
+  );
+}
+console.log(`claims contract ok: ${claims.length} listed claims each map to exactly one regression test`);

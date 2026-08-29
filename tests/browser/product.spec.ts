@@ -110,7 +110,7 @@ test('room creation reports its memory lifetime', async ({ request }) => {
   expect(room.expires_in_seconds).toBe(7200);
 });
 
-test('@claim:rate-limit API bursts enforce exactly 40 requests and return Retry-After', async ({ request }, testInfo) => {
+test('local API bursts enforce exactly 40 requests and return Retry-After', async ({ request }, testInfo) => {
   const client = testInfo.project.name === 'mobile' ? '203.0.113.41' : '203.0.113.40';
   const responses = await Promise.all(Array.from({ length: 45 }, () => request.post('/api/rooms', {
     headers: { 'X-Forwarded-For': client },
@@ -165,6 +165,71 @@ test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue,
   await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
   await expect(host.locator('#score-value')).toHaveAttribute('data-taps', '1');
   await expect(companion.locator('#score-value')).toHaveText(await host.locator('#score-value').textContent() ?? '0%');
+  await hostContext.close();
+  await companionContext.close();
+});
+
+test('@claim:haptic-output a supported phone and controller receive each companion cue', async ({ browser }) => {
+  const hostContext = await browser.newContext({
+    extraHTTPHeaders: { 'X-Forwarded-For': '198.18.85.45' },
+  });
+  const companionContext = await browser.newContext({
+    extraHTTPHeaders: { 'X-Forwarded-For': '198.18.86.45' },
+  });
+  await companionContext.addInitScript(() => {
+    const calls = {
+      phone: [] as number[],
+      controller: [] as Array<{ type: string; duration: number; strongMagnitude: number; weakMagnitude: number }>,
+    };
+    Object.defineProperty(window, '__hapticCalls', { configurable: true, value: calls });
+    Object.defineProperty(navigator, 'vibrate', {
+      configurable: true,
+      value: (duration: number) => {
+        calls.phone.push(duration);
+        return true;
+      },
+    });
+    Object.defineProperty(navigator, 'getGamepads', {
+      configurable: true,
+      value: () => [{
+        vibrationActuator: {
+          playEffect: (type: string, parameters: { duration: number; strongMagnitude: number; weakMagnitude: number }) => {
+            calls.controller.push({ type, ...parameters });
+            return Promise.resolve('complete');
+          },
+        },
+      }],
+    });
+  });
+
+  const host = await hostContext.newPage();
+  const companion = await companionContext.newPage();
+  await host.goto('/host');
+  const code = await host.locator('#room-code').textContent();
+  expect(code).toMatch(/^[A-Z0-9]{6}$/);
+  await companion.goto(`/join/${code}`);
+  await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+
+  await host.locator('#bpm').fill('180');
+  await host.getByRole('button', { name: 'Start 60-second round' }).click();
+  await expect.poll(() => companion.evaluate(() => {
+    const calls = (window as unknown as { __hapticCalls: { phone: number[] } }).__hapticCalls;
+    return calls.phone;
+  })).toContain(45);
+  await expect.poll(() => companion.evaluate(() => {
+    const calls = (window as unknown as {
+      __hapticCalls: {
+        controller: Array<{ type: string; duration: number; strongMagnitude: number; weakMagnitude: number }>;
+      };
+    }).__hapticCalls;
+    return calls.controller;
+  })).toContainEqual({
+    type: 'dual-rumble',
+    duration: 60,
+    strongMagnitude: 0.7,
+    weakMagnitude: 0.4,
+  });
+
   await hostContext.close();
   await companionContext.close();
 });
