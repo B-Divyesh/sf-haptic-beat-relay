@@ -46,6 +46,7 @@ test('regression: the audience and sample action fit in the first viewport', asy
 
 test('keyboard users can skip navigation, change routes, and recover from form errors', async ({ page }) => {
   await page.goto('/join');
+  await expect(page.locator('header .skip-link')).toHaveCount(1);
   await page.keyboard.press('Tab');
   const skipLink = page.getByRole('link', { name: 'Skip to main content' });
   await expect(skipLink).toBeFocused();

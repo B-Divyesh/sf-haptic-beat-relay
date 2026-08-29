@@ -1,0 +1,51 @@
+{
+  "work_order": "haptic-beat-relay-repair-13",
+  "verified_at_utc": "2026-08-29",
+  "repair_commit": "15a17fcd87ab5c172e108ad690fc54a8a5e0a196",
+  "deployment": {
+    "command": "npm run deploy -- 15a17fcd87ab5c172e108ad690fc54a8a5e0a196",
+    "image_digest": "sha256:2d6ac7aed53f4000f7395e5d782d91b4fb0747e5edb5906ff50e6b9f7bf1b362",
+    "revision": "sf-haptic-beat-relay--r15a17fcd87",
+    "active_revisions": 1,
+    "ingress_transport": "Http",
+    "min_replicas": 1,
+    "max_replicas": 1,
+    "running_replicas": 1,
+    "health_build_sha": "15a17fcd87ab5c172e108ad690fc54a8a5e0a196"
+  },
+  "live_relay": {
+    "api_create_join_passed": 30,
+    "browser_desktop_host_mobile_companion_passed": 30
+  },
+  "live_rate_limit": {
+    "fresh_clients": 5,
+    "accepted_per_client": 40,
+    "http_429_per_client": 5,
+    "retry_after": "1"
+  },
+  "claims": {
+    "commands_run": 15,
+    "passed": 15
+  },
+  "factory_url_verifier": {
+    "http_status": 200,
+    "load_ms": 601,
+    "console_or_page_errors": 0,
+    "title_present": true,
+    "lang": "en",
+    "h1_count": 1,
+    "main_present": true,
+    "images_missing_alt": 0
+  },
+  "lighthouse_mobile": {
+    "performance": 100,
+    "accessibility": 100,
+    "best_practices": 100,
+    "seo": 100,
+    "fcp_ms": 1051.0815,
+    "lcp_ms": 1501.0815,
+    "tbt_ms": 23,
+    "cls": 0,
+    "total_bytes": 166650
+  }
+}

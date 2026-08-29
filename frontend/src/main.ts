@@ -33,8 +33,8 @@ const pageTitles: Record<string, string> = {
 
 function header(): string {
   return `
-    <a class="skip-link" href="#main">Skip to main content</a>
     <header class="site-header">
+      <a class="skip-link" href="#main">Skip to main content</a>
       <a class="wordmark" href="/" data-route aria-label="Haptic Beat Relay home">
         <span class="wordmark-pulse" aria-hidden="true"></span>
         <span>Haptic Beat Relay</span>
