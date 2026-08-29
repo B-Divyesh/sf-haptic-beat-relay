@@ -57,7 +57,7 @@
   },
   {
     "id": "rate-limit",
-    "claim": "Room API bursts are limited and return Retry-After.",
+    "claim": "Each client may make exactly 40 room API requests per second; later requests return 429 with Retry-After.",
     "where": "README",
     "test": "npm run test:browser -- --grep @claim:rate-limit",
     "sandbox": "fresh request identity; send a 45-request burst and assert 429 with Retry-After"
@@ -82,5 +82,19 @@
     "where": "landing limits, README",
     "test": "npm run test:browser -- --grep @claim:visual-cue",
     "sandbox": "two fresh browser contexts with vibration unavailable; relay one cue and assert the companion tap pad enters its visual cue state"
+  },
+  {
+    "id": "real-round-duration",
+    "claim": "A real round lasts 60 seconds.",
+    "where": "host round action, README",
+    "test": "npm run test:browser -- --grep @claim:real-round-duration",
+    "sandbox": "two fresh browser contexts; start a connected real round, assert it is active at 59 seconds, then measure completion at 60 seconds"
+  },
+  {
+    "id": "singleton-deployment",
+    "claim": "The live relay runs as exactly one Container App replica because room state is process-local.",
+    "where": "README deployment and privacy sections",
+    "test": "npm run test:live-topology",
+    "sandbox": "read-only Azure queries; assert one active revision, min/max one, HTTP ingress, one running replica, and live health identity matching HEAD"
   }
 ]

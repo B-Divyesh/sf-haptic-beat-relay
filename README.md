@@ -32,6 +32,13 @@ npm test
 
 This runs TypeScript unit tests, the production container contract check, Rust API tests, the clean-entry-point regression, and Playwright in desktop and 390 px mobile views. The browser-test entry point builds the production frontend, so every claim-specific command in [.factory/claims.json](.factory/claims.json) works after a clean `npm ci` without a separate build step.
 
+The real connected round is timed for 60 seconds. Its claim test measures the
+unaccelerated browser flow and takes about one minute:
+
+```sh
+npm run test:browser -- --grep @claim:real-round-duration
+```
+
 To run the verifier regression by itself:
 
 ```sh
@@ -47,7 +54,12 @@ WebSocket handshake, or browser error:
 
 ```sh
 npm run test:live-relay
+npm run test:live-topology
 ```
+
+The topology check uses read-only Azure queries. It verifies one active
+revision, one configured and running replica, HTTP ingress, and a live build
+SHA matching the checked-out commit.
 
 ## How it works
 
@@ -68,7 +80,7 @@ docker run --rm -p 8080:8080 haptic-beat-relay
 curl http://localhost:8080/health
 ```
 
-The multi-stage image runs as a non-root user. `/health` reports the build SHA. API routes use the first `X-Forwarded-For` address for a 40-request burst limit and return `429` with `Retry-After`.
+The multi-stage image runs as a non-root user. `/health` reports the build SHA. API routes use the first `X-Forwarded-For` address. Each client may make exactly 40 room API requests per second; later requests return `429` with `Retry-After`.
 
 ## Deploy
 

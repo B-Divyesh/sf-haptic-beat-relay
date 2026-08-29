@@ -28,6 +28,22 @@ test('landing page explains the job and passes an accessibility scan', async ({ 
   expect(errors).toEqual([]);
 });
 
+test('regression: the audience and sample action fit in the first viewport', async ({ page }) => {
+  await page.goto('/');
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  for (const locator of [
+    page.locator('h1'),
+    page.locator('.hero-copy .lede'),
+    page.getByRole('link', { name: 'Try it with sample data' }),
+  ]) {
+    const box = await locator.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y, await locator.innerText()).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height, await locator.innerText()).toBeLessThanOrEqual(viewport!.height);
+  }
+});
+
 test('keyboard users can skip navigation, change routes, and recover from form errors', async ({ page }) => {
   await page.goto('/join');
   await page.keyboard.press('Tab');
@@ -149,6 +165,41 @@ test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue,
   await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
   await expect(host.locator('#score-value')).toHaveAttribute('data-taps', '1');
   await expect(companion.locator('#score-value')).toHaveText(await host.locator('#score-value').textContent() ?? '0%');
+  await hostContext.close();
+  await companionContext.close();
+});
+
+test('@claim:real-round-duration a real round completes after 60 seconds', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'One measured browser run proves the shared 60-second timer.');
+  test.setTimeout(80_000);
+  const hostContext = await browser.newContext({
+    extraHTTPHeaders: { 'X-Forwarded-For': '198.18.83.60' },
+  });
+  const companionContext = await browser.newContext({
+    extraHTTPHeaders: { 'X-Forwarded-For': '198.18.84.60' },
+  });
+  const host = await hostContext.newPage();
+  const companion = await companionContext.newPage();
+
+  await host.goto('/host');
+  const code = await host.locator('#room-code').textContent();
+  expect(code).toMatch(/^[A-Z0-9]{6}$/);
+  await companion.goto(`/join/${code}`);
+  await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+
+  const start = host.getByRole('button', { name: 'Start 60-second round' });
+  await expect(start).toBeEnabled();
+  const startedAt = Date.now();
+  await start.click();
+  await host.waitForTimeout(59_000);
+  await expect(host.getByRole('button', { name: 'Round in progress' })).toBeDisabled();
+  await expect(host.locator('#round-state')).not.toContainText('Round complete');
+  await expect(host.getByRole('button', { name: 'Start another 60-second round' })).toBeEnabled({ timeout: 3_000 });
+  const elapsed = Date.now() - startedAt;
+  expect(elapsed).toBeGreaterThanOrEqual(59_500);
+  expect(elapsed).toBeLessThan(63_000);
+  await expect(companion.locator('#round-state')).toContainText('Round complete');
+
   await hostContext.close();
   await companionContext.close();
 });
