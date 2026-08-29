@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    net::{IpAddr, SocketAddr},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -421,7 +422,7 @@ async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next:
         .get("x-forwarded-for")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.split(',').next())
-        .map(str::trim)
+        .map(forwarded_client_identity)
         .filter(|value| !value.is_empty())
         .unwrap_or("direct")
         .to_string();
@@ -451,6 +452,20 @@ async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next:
     }
     drop(rates);
     next.run(request).await
+}
+
+// Azure ingress can provide the first X-Forwarded-For hop as `IP:port`.
+// The port is per connection, not the client identity; retaining it would let
+// one client evade the limiter by opening new connections.
+fn forwarded_client_identity(value: &str) -> &str {
+    let value = value.trim();
+    if value.parse::<IpAddr>().is_ok() {
+        return value;
+    }
+    if value.parse::<SocketAddr>().is_ok() {
+        return value.rsplit_once(':').map_or(value, |(ip, _)| ip);
+    }
+    value
 }
 
 fn normalized_code(value: &str) -> Result<String, ApiError> {
@@ -617,6 +632,26 @@ mod tests {
                 .oneshot(
                     Request::post("/api/rooms")
                         .header("x-forwarded-for", "203.0.113.8")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status();
+        }
+        assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn rate_limit_groups_forwarded_ip_addresses_despite_changing_ports() {
+        let application = app("frontend/dist");
+        let mut last = StatusCode::OK;
+        for port in 40_000..40_041 {
+            last = application
+                .clone()
+                .oneshot(
+                    Request::post("/api/rooms")
+                        .header("x-forwarded-for", format!("203.0.113.9:{port}"))
                         .body(Body::empty())
                         .unwrap(),
                 )
