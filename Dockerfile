@@ -5,7 +5,7 @@ RUN npm ci
 COPY frontend ./frontend
 RUN npm run build
 
-FROM rust:1.85-bookworm AS backend-builder
+FROM rust:1-slim AS backend-builder
 ARG BUILD_SHA=dev
 ENV BUILD_SHA=${BUILD_SHA}
 WORKDIR /build
@@ -22,4 +22,3 @@ USER 10001
 ENV PORT=8080
 EXPOSE 8080
 ENTRYPOINT ["/app/haptic-beat-relay"]
-

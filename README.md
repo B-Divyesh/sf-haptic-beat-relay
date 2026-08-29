@@ -30,7 +30,7 @@ For frontend work with live reload, run the backend and `npm run dev` in separat
 npm test
 ```
 
-This runs TypeScript unit tests, Rust API tests, the clean-entry-point regression, and Playwright in desktop and 390 px mobile views. The browser-test entry point builds the production frontend, so every claim-specific command in [.factory/claims.json](.factory/claims.json) works after a clean `npm ci` without a separate build step.
+This runs TypeScript unit tests, the production container contract check, Rust API tests, the clean-entry-point regression, and Playwright in desktop and 390 px mobile views. The browser-test entry point builds the production frontend, so every claim-specific command in [.factory/claims.json](.factory/claims.json) works after a clean `npm ci` without a separate build step.
 
 To run the verifier regression by itself:
 
