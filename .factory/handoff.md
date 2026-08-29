@@ -1,11 +1,12 @@
 # Haptic Beat Relay — repair 17 handoff
 
-## Release candidate
+## Released candidate
 
 - **Repair base:** `b6e326aa4d4289f8f4f2d6b3db2f601a6dc31ff1`
+- **Deployed artifact commit:** `42222a679e91d36af9fb854fccdb0036a925a6db`
 - **Live URL:** <https://haptic-beat-relay.sociobot.in>
 - **Prior independent report:** [verification-17.md](verification-17.md)
-- **Prepared:** 2026-08-29 UTC
+- **Released and live-verified:** 2026-08-29 21:05 UTC
 
 ## What changed
 
@@ -61,21 +62,36 @@ does not clear the blocker: verification 17 captured 45/45 after scale-out,
 which is why the deployment guard now rejects the unsafe scale range and every
 release runs five fresh-client bursts.
 
-## Release procedure and remaining live evidence
+## Deployment and final live evidence
 
-Commit and push this handoff with the repair, then run `npm run deploy`. The
-guarded command builds the candidate in ACR and is the final deployment action;
-it blocks unless Azure reports Single revisions, HTTP ingress, min/max one, one
-active 100%-traffic revision, one running and ready replica, the full candidate
-SHA image tag, and the SHA-derived revision suffix. It then runs:
+`npm run deploy` built and rolled out the full immutable ACR tag for
+`42222a679e91d36af9fb854fccdb0036a925a6db`. The guarded command completed its
+own topology, 30-round relay, and five-client allowance gates. The three gates
+were then rerun independently with these exact results:
 
-```sh
-RELAY_EXPECTED_SHA=<candidate-sha> npm run test:live-topology
-RELAY_ROUNDS=30 npm run test:live-relay
-RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+```json
+{
+  "revision": "sf-haptic-beat-relay--r42222a679e",
+  "activeRevisions": 1,
+  "minReplicas": 1,
+  "maxReplicas": 1,
+  "runningReplicas": 1,
+  "readyReplicas": 1,
+  "transport": "Http",
+  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:42222a679e91d36af9fb854fccdb0036a925a6db",
+  "buildSha": "42222a679e91d36af9fb854fccdb0036a925a6db"
+}
 ```
 
-There are no known product gaps after the live gate passes. Do not scale this
-implementation beyond one replica or add durable room storage without changing
-the explicit ephemeral-room privacy/expiry contract and moving all relay and
-rate-limit state together.
+`RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit` passed for five fresh
+forwarded clients. Each result was exactly `accepted: 40`, `limited: 5`, and
+`retryAfter: "1"`. `RELAY_ROUNDS=30 npm run test:live-relay` passed:
+
+```text
+live relay regression passed: 30/30 fresh API create→join checks and 30/30 fresh desktop-host + 390px-companion WebSocket rounds at https://haptic-beat-relay.sociobot.in
+```
+
+There are no known product gaps. Do not scale this implementation beyond one
+replica or add durable room storage without changing the explicit
+ephemeral-room privacy/expiry contract and moving all relay and rate-limit
+state together.
