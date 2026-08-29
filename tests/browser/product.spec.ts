@@ -1,6 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+// The product keys limits by the first forwarded client address. Give each
+// browser test a stable, separate identity so a claim's intentional 45-request
+// burst cannot spend the allowance used by an unrelated test or viewport.
+let browserTestIdentity = 1;
+test.beforeEach(async ({ context }, testInfo) => {
+  const subnet = testInfo.project.name === 'mobile' ? 82 : 81;
+  await context.setExtraHTTPHeaders({
+    'X-Forwarded-For': `198.18.${subnet}.${browserTestIdentity++}`,
+  });
+});
+
 test('landing page explains the job and passes an accessibility scan', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (message) => {

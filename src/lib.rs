@@ -41,7 +41,6 @@ const RATE_BURST: u32 = 40;
 pub struct AppState {
     rooms: Arc<Mutex<HashMap<String, Room>>>,
     rates: Arc<Mutex<HashMap<String, RateEntry>>>,
-    global_rate: Arc<Mutex<RateEntry>>,
     room_ttl: Duration,
 }
 
@@ -62,10 +61,6 @@ impl Default for AppState {
         Self {
             rooms: Arc::new(Mutex::new(HashMap::new())),
             rates: Arc::new(Mutex::new(HashMap::new())),
-            global_rate: Arc::new(Mutex::new(RateEntry {
-                window_started: Instant::now(),
-                count: 0,
-            })),
             room_ttl: ROOM_TTL,
         }
     }
@@ -432,17 +427,18 @@ async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next:
         .unwrap_or("direct")
         .to_string();
 
-    let mut global_rate = state.global_rate.lock().await;
     let mut rates = state.rates.lock().await;
+    // Entries only matter for one burst window. Pruning here keeps forwarded
+    // client identities from accumulating in this intentionally ephemeral
+    // service without introducing a cross-client quota.
+    rates.retain(|_, entry| entry.window_started.elapsed() < RATE_WINDOW);
     let entry = rates.entry(client).or_insert(RateEntry {
         window_started: Instant::now(),
         count: 0,
     });
     let client_limited = consume_rate_slot(entry);
-    let global_limited = consume_rate_slot(&mut global_rate);
-    if client_limited || global_limited {
+    if client_limited {
         drop(rates);
-        drop(global_rate);
         let mut response = ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limited",
@@ -676,23 +672,65 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rate_limit_has_a_global_burst_guard_when_ingress_changes_forwarded_clients() {
+    async fn rate_limit_gives_each_forwarded_client_its_own_40_request_allowance() {
         let application = app("frontend/dist");
-        let mut last = StatusCode::OK;
-        for octet in 1..42 {
-            last = application
+        let responses = futures_util::future::join_all((1..=100).map(|octet| {
+            application.clone().oneshot(
+                Request::post("/api/rooms")
+                    .header("x-forwarded-for", format!("203.0.113.{octet}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        }))
+        .await;
+        for response in responses {
+            let response = response.unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "a separate forwarded client must not consume another client's allowance"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rate_limit_returns_retry_after_after_exactly_40_requests_per_client() {
+        let application = app("frontend/dist");
+        let mut statuses = Vec::new();
+        let mut retry_after = Vec::new();
+        for _ in 0..45 {
+            let response = application
                 .clone()
                 .oneshot(
                     Request::post("/api/rooms")
-                        .header("x-forwarded-for", format!("203.0.113.{octet}"))
+                        .header("x-forwarded-for", "198.51.100.45")
                         .body(Body::empty())
                         .unwrap(),
                 )
                 .await
-                .unwrap()
-                .status();
+                .unwrap();
+            statuses.push(response.status());
+            retry_after.push(response.headers().get(header::RETRY_AFTER).cloned());
         }
-        assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|&&status| status == StatusCode::OK)
+                .count(),
+            40
+        );
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|&&status| status == StatusCode::TOO_MANY_REQUESTS)
+                .count(),
+            5
+        );
+        assert!(retry_after
+            .iter()
+            .zip(statuses)
+            .filter(|(_, status)| *status == StatusCode::TOO_MANY_REQUESTS)
+            .all(|(value, _)| value == &Some(HeaderValue::from_static("1"))));
     }
 
     #[tokio::test]

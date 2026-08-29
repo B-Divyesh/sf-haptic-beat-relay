@@ -13,40 +13,59 @@ case "$revision" in
     ;;
 esac
 
+short_revision="$(printf %.10s "$revision")"
+
 az acr build \
   --registry sociobotregistry \
   --image "sf-haptic-beat-relay:$revision" \
   --build-arg "BUILD_SHA=$revision" \
   .
 
-az containerapp update \
+# This product intentionally keeps ephemeral rooms, authenticated WebSocket
+# sessions, and the per-client limiter in one process. Make that runtime
+# boundary explicit before creating the revision; source JSON alone cannot
+# protect a deployment made through a different CLI path.
+az containerapp revision set-mode \
   --resource-group sociobot \
   --name sf-haptic-beat-relay \
-  --image "sociobotregistry.azurecr.io/sf-haptic-beat-relay:$revision" \
-  --min-replicas 1 \
-  --max-replicas 1
+  --mode single
 
-# WebSocket upgrades use HTTP/1.1. Pinning the ingress transport avoids an
-# implicit protocol choice while the single process owns the room map.
 az containerapp ingress update \
   --resource-group sociobot \
   --name sf-haptic-beat-relay \
   --transport http
+
+az containerapp update \
+  --resource-group sociobot \
+  --name sf-haptic-beat-relay \
+  --image "sociobotregistry.azurecr.io/sf-haptic-beat-relay:$revision" \
+  --revision-suffix "r$short_revision" \
+  --min-replicas 1 \
+  --max-replicas 1
 
 actual_mode="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.activeRevisionsMode' --output tsv)"
 actual_min="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.template.scale.minReplicas' --output tsv)"
 actual_max="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.template.scale.maxReplicas' --output tsv)"
 actual_transport="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.ingress.transport' --output tsv | tr '[:upper:]' '[:lower:]')"
 active_revisions=0
-for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+active_revision=""
+running_replicas=0
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
   active_revisions="$(az containerapp revision list --resource-group sociobot --name sf-haptic-beat-relay --query 'length([?properties.active])' --output tsv)"
-  [ "$active_revisions" = "1" ] && break
+  active_revision="$(az containerapp revision list --resource-group sociobot --name sf-haptic-beat-relay --query '[?properties.active && properties.trafficWeight == `100`].name | [0]' --output tsv)"
+  if [ "$active_revisions" = "1" ] && [ -n "$active_revision" ]; then
+    running_replicas="$(az containerapp replica list --resource-group sociobot --name sf-haptic-beat-relay --revision "$active_revision" --query 'length([?properties.runningState == `Running`])' --output tsv)"
+    [ "$running_replicas" = "1" ] && break
+  fi
   sleep 5
 done
 
-if [ "$actual_mode" != "Single" ] || [ "$actual_min" != "1" ] || [ "$actual_max" != "1" ] || [ "$actual_transport" != "http" ] || [ "$active_revisions" != "1" ]; then
-  echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport active_revisions=$active_revisions" >&2
+active_min="$(az containerapp revision show --resource-group sociobot --name sf-haptic-beat-relay --revision "$active_revision" --query 'properties.template.scale.minReplicas' --output tsv)"
+active_max="$(az containerapp revision show --resource-group sociobot --name sf-haptic-beat-relay --revision "$active_revision" --query 'properties.template.scale.maxReplicas' --output tsv)"
+
+if [ "$actual_mode" != "Single" ] || [ "$actual_min" != "1" ] || [ "$actual_max" != "1" ] || [ "$actual_transport" != "http" ] || [ "$active_revisions" != "1" ] || [ -z "$active_revision" ] || [ "$active_min" != "1" ] || [ "$active_max" != "1" ] || [ "$running_replicas" != "1" ]; then
+  echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport active_revisions=$active_revisions active_revision=${active_revision:-none} active_min=${active_min:-none} active_max=${active_max:-none} running_replicas=$running_replicas" >&2
   exit 1
 fi
 
-echo "Relay deployment contract verified: one active revision, one replica, HTTP ingress."
+echo "Relay deployment contract verified: revision=$active_revision, one active/running replica, HTTP ingress."

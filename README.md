@@ -58,7 +58,7 @@ npm run test:live-relay
 - The companion uses phone vibration or a connected gamepad when supported.
 - The screen flashes each cue when vibration is unavailable.
 
-Rooms expire after two hours and disappear on server restart. The relay intentionally runs as exactly one Container App replica because its temporary room and WebSocket state are held in that process. The checked-in deployment contract pins both the minimum and maximum to one; it must not be scaled out without moving room state and broadcast delivery to a shared service. The service has no database, user accounts, music catalog, tracking script, or payment code.
+Rooms expire after two hours and disappear on server restart. The relay intentionally runs as exactly one Container App replica because its temporary room, WebSocket state, and per-client rate bucket are held in that process. The checked-in deployment contract pins both the minimum and maximum to one; it must not be scaled out without moving room state, broadcast delivery, and rate limiting to a shared service. The service has no database, user accounts, music catalog, tracking script, or payment code.
 
 ## Container
 
@@ -72,7 +72,7 @@ The multi-stage image runs as a non-root user. `/health` reports the build SHA. 
 
 ## Deploy
 
-The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth runtime contract: one active revision, exactly one replica, and HTTP ingress for WebSocket upgrades. Deploy a revision with `scripts/deploy-containerapp.sh <full-git-sha>`; it builds in ACR, applies those settings, then queries Azure and fails unless they are live.
+The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth runtime contract: one active revision, exactly one replica, and HTTP ingress for WebSocket upgrades. Deploy a revision with `scripts/deploy-containerapp.sh <full-git-sha>`; it builds in ACR, forces single-revision mode, applies the scale and transport settings, and fails unless the active revision itself has one ready replica.
 
 ## Project records
 
