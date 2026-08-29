@@ -15,6 +15,7 @@ const revision = '0123456789abcdef0123456789abcdef01234567';
 try {
   mkdirSync(fakeBin);
   const fakeAz = join(fakeBin, 'az');
+  const fakeGit = join(fakeBin, 'git');
   const fakeNpm = join(fakeBin, 'npm');
   const fakeSleep = join(fakeBin, 'sleep');
 
@@ -33,12 +34,21 @@ case "$*" in
   *"revision show"*"scale.maxReplicas"*) printf '1\\n' ;;
 esac
 `, 'utf8');
+  writeFileSync(fakeGit, `#!/usr/bin/env sh
+set -eu
+if [ "$*" = "rev-parse --verify HEAD" ]; then
+  printf '%s\\n' "$RELAY_DEPLOY_EXPECTED_REVISION"
+  exit 0
+fi
+exit 2
+`, 'utf8');
   writeFileSync(fakeNpm, `#!/usr/bin/env sh
 set -eu
 printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELAY_RATE_REPETITIONS:-}" "$*" >> "$RELAY_DEPLOY_NPM_LOG"
 `, 'utf8');
   writeFileSync(fakeSleep, '#!/usr/bin/env sh\nexit 0\n', 'utf8');
   chmodSync(fakeAz, 0o755);
+  chmodSync(fakeGit, 0o755);
   chmodSync(fakeNpm, 0o755);
   chmodSync(fakeSleep, 0o755);
 
@@ -50,6 +60,7 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       PATH: `${fakeBin}:${process.env.PATH}`,
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_EXPECTED_REVISION: revision,
       RELAY_ROUNDS: '1',
     },
   });
@@ -80,6 +91,22 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
     ],
     'a successful deployment must run the topology identity, repeated relay, and five-fresh-client rate-limit gates',
   );
+
+  const commandsBeforeMismatch = readFileSync(commandLog, 'utf8');
+  const mismatch = spawnSync('sh', [deployScript, 'fedcba9876543210fedcba9876543210fedcba98'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      RELAY_DEPLOY_COMMAND_LOG: commandLog,
+      RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_EXPECTED_REVISION: revision,
+    },
+  });
+  assert.equal(mismatch.status, 2, 'a release identity different from HEAD must be rejected before deployment');
+  assert.match(mismatch.stderr, /does not match checked-out HEAD/, 'the rejected identity must explain the recovery');
+  assert.equal(readFileSync(commandLog, 'utf8'), commandsBeforeMismatch, 'a mismatched identity must not call Azure');
 
 console.log('deployment command regression passed: singleton scale, post-rollout HTTP ingress, and all live gates are enforced');
 } finally {

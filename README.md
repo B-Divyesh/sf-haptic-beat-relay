@@ -100,7 +100,8 @@ for WebSocket upgrades. Deploy a revision with
 `npm run deploy -- <full-git-sha>`; it builds in ACR, forces single-revision
 mode, applies the scale and transport settings, and fails unless the active
 revision itself has one ready replica and the live topology, relay, and
-five-client rate-limit checks pass.
+five-client rate-limit checks pass. The supplied SHA must be the exact
+checked-out `HEAD`, so the deployed health identity cannot drift from source.
 
 ## Project records
 

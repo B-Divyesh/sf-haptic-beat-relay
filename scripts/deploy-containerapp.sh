@@ -5,13 +5,23 @@
 # coherent unless Azure has applied it to the live revision.
 set -eu
 
-revision="${1:-$(git rev-parse --verify HEAD)}"
+checked_out_revision="$(git rev-parse --verify HEAD)"
+revision="${1:-$checked_out_revision}"
 case "$revision" in
   *[!0123456789abcdef]* | '')
     echo "Expected a lowercase hexadecimal Git revision, got: $revision" >&2
     exit 2
     ;;
 esac
+
+# The build argument is also the identity asserted by /health. Refusing a
+# different value keeps a mistyped or stale caller-provided SHA from producing
+# an otherwise healthy deployment that can never satisfy the live identity
+# gate.
+if [ "$revision" != "$checked_out_revision" ]; then
+  echo "Refusing to deploy $revision: it does not match checked-out HEAD $checked_out_revision" >&2
+  exit 2
+fi
 
 short_revision="$(printf %.10s "$revision")"
 
