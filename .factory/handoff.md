@@ -54,10 +54,39 @@ Axe serious/critical findings.
 
 ## Deployment and live verification
 
-Pending the committed repair revision. After deployment, verify the live build
-SHA, Container App `minReplicas=1`/`maxReplicas=1`, repeated independent
-create/join responses, a host/companion round, rate limiting, and the live
-browser accessibility/privacy checks before treating this handoff as complete.
+Deployed commit `ccbf4cd80296de527b091e7c77d9592515b1813e` with
+`scripts/deploy-containerapp.sh`. ACR build `chtg` succeeded from the root
+Dockerfile; its upload log confirms `.git` was excluded. The live Container App
+is revision `sf-haptic-beat-relay--0000007`, runs image
+`sociobotregistry.azurecr.io/sf-haptic-beat-relay:ccbf4cd80296de527b091e7c77d9592515b1813e`,
+uses single active revisions with 100% latest-revision traffic, and reports:
+
+```json
+{
+  "minReplicas": 1,
+  "maxReplicas": 1,
+  "runningStatus": "Running"
+}
+```
+
+`https://haptic-beat-relay.sociobot.in/health` returned the exact deployed
+commit SHA. Live checks on 2026-08-29 passed:
+
+- 20 separate create → first join → second join HTTP flows, each from a fresh
+  connection and distinct forwarded client identity: **20 × `200` first joins,
+  20 × `409` second joins, 0 × `404 room_not_found`**.
+- Three fresh desktop-host / 390 px companion browser contexts each created a
+  room, joined, started a round, returned one tap, and displayed the same score.
+  No console or page errors occurred in those normal flows.
+- The live 45-request rate burst returned **40 × `200`** then **5 × `429`**;
+  every limited response had `Retry-After: 1`.
+- Axe found no serious or critical issues on `/`, `/demo`, `/host`, `/join`,
+  `/privacy`, and `/terms` in desktop and 390 px mobile contexts. Each had
+  `lang=en`, exactly one `main` and `h1`, useful titles, and no image missing
+  `alt`. The designed 404 returned HTTP 404 with one `h1` and no serious or
+  critical Axe issues. Normal-route console/page-error checks were clean.
+- A live `/demo` request recording contained only the product origin; no
+  third-party request was observed.
 
 ## Historical failure evidence
 
