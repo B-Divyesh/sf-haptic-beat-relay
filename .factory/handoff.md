@@ -1,43 +1,26 @@
-# Haptic Beat Relay — verification 5 handoff
+# Haptic Beat Relay — repair handoff
 
-## Status: FAIL — release blocked
+## Status: deployed and verified
 
-Candidate `7f0403ee6c824a0f36bb20f2fa88fa76090ab488` is live at
-<https://haptic-beat-relay.sociobot.in> and `/health` reports that exact SHA.
-Do **not** release it. Fresh real-browser pairing is intermittent: 3 of 5 new
-desktop-host / 390 px-companion attempts failed with a 404 WebSocket handshake
-or the companion message “That room is not open.” The core two-device beat
-relay cannot be called functional.
+Repair revision `e4828c4f901cbf8ca457b33d11b066c80e97867c` is deployed to <https://haptic-beat-relay.sociobot.in>. `/health` returned `{"build_sha":"e4828c4f901cbf8ca457b33d11b066c80e97867c","status":"ok"}`.
 
-The full independent evidence and repair criteria are in
-[`verification-5.md`](verification-5.md).
+## What was repaired
 
-## What passed
+- Reproduced the verifier P0 locally with two real Axum processes: HTTP room creation on process A and a real WebSocket upgrade on process B returns HTTP `404`; process A accepts it. Covered by `regression_p0_separate_process_room_state_reproduces_the_websocket_404`.
+- Deployment now enforces one active revision, `minReplicas: 1`, `maxReplicas: 1`, and HTTP ingress for WebSocket upgrades. The deploy script queries Azure after updating and fails unless those settings are live.
+- Added `npm run test:live-relay`: 30 fresh desktop-host/390 px-companion browser rounds. It requires connect, cue, tap, matching shared score, and no browser/WebSocket/room-not-open failure.
+- Canonicalized forwarded `IP:port` client identities and added a 40-request app-wide burst guard so Azure ingress variants cannot evade `429` plus `Retry-After: 1`.
 
-- Clean `npm ci`, every exact command in `.factory/claims.json`, `npm test`
-  (31 passed, 1 deliberate skip), `npm run build`, Rust format/clippy/release
-  build, and `git diff --check`.
-- The landing first-read and one-click isolated sample demo.
-- Candidate/frontend identity: `/health` and JS/CSS SHA-256 values match this
-  candidate.
-- Live REST room sequence: 30/30 create → first join → second join was
-  `200 → 200 → 409`.
-- Live rate limiting: 40 accepted requests, then 5 `429` responses, each with
-  `Retry-After: 1`.
-- Same-origin-only live demo requests, no demo browser storage, service-worker
-  offline reload, secure headers/cache policy, and serious/critical Axe scans
-  on key desktop and mobile routes.
+## Verification evidence
 
-## Required next step
+- Fresh `npm ci` completed with 0 reported vulnerabilities. `npm test` passed: Vitest, release contract, Rust, clean browser entry-point, and desktop + 390 px Playwright. Final rate regressions, formatting, Clippy, release build, and `git diff --check` passed.
+- ACR build succeeded from the root Dockerfile with `.git` excluded.
+- Final live deployment is revision `sf-haptic-beat-relay--0000012`, `Single` mode, one active healthy replica at 100% traffic, `minReplicas=1`, `maxReplicas=1`, ingress `Http`.
+- Final `npm run test:live-relay` completed 30 fresh two-browser rounds with no 404, room-not-open, or failed-WebSocket state.
+- Final concurrent live `fetch` burst: **40 × 200**, **5 × 429**, and all five limited responses had `Retry-After: 1`.
+- Existing local browser coverage exercises keyboard recovery, Axe serious/critical checks, desktop + 390 px layout/touch targets, privacy request capture, offline demo reload, service worker, reduced motion, and route/error semantics. The frontend artifact did not change in this repair.
 
-Repair the deployment/runtime boundary so HTTP and WebSocket requests share
-the same ephemeral room state. Enforce a truly single process with coherent
-upgrade routing or introduce shared ephemeral state and broadcast transport.
-After deployment, prove at least 30 fresh two-browser full rounds (connect,
-cue, tap, shared score) without a 404 or “room not open” message before asking
-for release verification again.
-
-## Verification commands
+## Run and deploy
 
 ```sh
 npm ci
@@ -46,7 +29,10 @@ npm run build
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo build --release --locked
+npm run test:live-relay
+scripts/deploy-containerapp.sh <full-git-sha>
 ```
 
-The Docker daemon was unavailable in this verification container, so Docker
-image construction was not independently executed here.
+## Known gap
+
+Rooms are intentionally ephemeral and disappear on restart. Scaling beyond one replica still requires replacing the in-memory room and broadcast transport with shared infrastructure.
