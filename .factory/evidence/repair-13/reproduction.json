@@ -1,0 +1,38 @@
+{
+  "work_order": "haptic-beat-relay-repair-13",
+  "observed_at_utc": "2026-08-29T14:57:04Z",
+  "live_url": "https://haptic-beat-relay.sociobot.in",
+  "before": {
+    "health_build_sha": "3e6238218195eecf4504528b193a87768909604c",
+    "active_revision": "sf-haptic-beat-relay--0000020",
+    "active_revisions_mode": "Single",
+    "ingress_transport": "Auto",
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "running_replicas_after_load_smoke": 3
+  },
+  "bounded_load_smoke": {
+    "requests_per_second": 100,
+    "duration_seconds": 40,
+    "total_requests": 4000,
+    "http_200": 4000
+  },
+  "exact_failures": {
+    "rate_limit": {
+      "command": "RELAY_TEST_CLIENT=198.51.100.230 RELAY_RATE_REPETITIONS=1 npm run test:live-rate-limit",
+      "accepted": 45,
+      "expected_accepted": 40,
+      "http_429": 0,
+      "expected_http_429": 5,
+      "retry_after_observed": false
+    },
+    "relay": {
+      "command": "RELAY_ROUNDS=3 npm run test:live-relay",
+      "result": "failed waiting for the host and companion to share room state"
+    },
+    "topology": {
+      "command": "npm run test:live-topology",
+      "result": "failed because ingress transport was Auto instead of http"
+    }
+  }
+}

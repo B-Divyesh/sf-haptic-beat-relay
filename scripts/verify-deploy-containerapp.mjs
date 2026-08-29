@@ -25,13 +25,13 @@ printf '%s\\n' "$*" >> "$RELAY_DEPLOY_COMMAND_LOG"
 case "$*" in
   *"containerapp show"*"activeRevisionsMode"*) printf 'Single\\n' ;;
   *"containerapp show"*"scale.minReplicas"*) printf '1\\n' ;;
-  *"containerapp show"*"scale.maxReplicas"*) printf '1\\n' ;;
-  *"containerapp show"*"ingress.transport"*) printf 'Http\\n' ;;
+  *"containerapp show"*"scale.maxReplicas"*) printf '%s\\n' "\${RELAY_FAKE_MAX_REPLICAS:-1}" ;;
+  *"containerapp show"*"ingress.transport"*) printf '%s\\n' "\${RELAY_FAKE_TRANSPORT:-Http}" ;;
   *"revision list"*"length([?properties.active])"*) printf '1\\n' ;;
   *"revision list"*"trafficWeight"*) printf 'sf-haptic-beat-relay--r0123456789\\n' ;;
-  *"replica list"*) printf '1\\n' ;;
+  *"replica list"*) printf '%s\\n' "\${RELAY_FAKE_RUNNING_REPLICAS:-1}" ;;
   *"revision show"*"scale.minReplicas"*) printf '1\\n' ;;
-  *"revision show"*"scale.maxReplicas"*) printf '1\\n' ;;
+  *"revision show"*"scale.maxReplicas"*) printf '%s\\n' "\${RELAY_FAKE_MAX_REPLICAS:-1}" ;;
 esac
 `, 'utf8');
   writeFileSync(fakeGit, `#!/usr/bin/env sh
@@ -90,6 +90,37 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       `|1|5|run test:live-rate-limit`,
     ],
     'a successful deployment must run the topology identity, repeated relay, and five-fresh-client rate-limit gates',
+  );
+
+  // Reproduce verification 13's exact release blocker in the deployment
+  // harness: a generic rollout restored Auto ingress and a 1-3 replica range,
+  // then three processes split room and rate-limit state. The source-owned
+  // path must stop before any live success gate can run in that topology.
+  const npmBeforeDrift = readFileSync(npmLog, 'utf8');
+  const drift = spawnSync('sh', [deployScript, revision], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      RELAY_DEPLOY_COMMAND_LOG: commandLog,
+      RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_EXPECTED_REVISION: revision,
+      RELAY_FAKE_TRANSPORT: 'Auto',
+      RELAY_FAKE_MAX_REPLICAS: '3',
+      RELAY_FAKE_RUNNING_REPLICAS: '3',
+    },
+  });
+  assert.equal(drift.status, 1, 'the verifier topology must block deployment');
+  assert.match(
+    drift.stderr,
+    /min=1 max=3 transport=auto[\s\S]*active_min=1 active_max=3 running_replicas=3/,
+    'the rejected deployment must report the exact ingress, scale, active-revision, and replica drift',
+  );
+  assert.equal(
+    readFileSync(npmLog, 'utf8'),
+    npmBeforeDrift,
+    'a drifted topology must not run relay or allowance success gates',
   );
 
   const commandsBeforeMismatch = readFileSync(commandLog, 'utf8');
