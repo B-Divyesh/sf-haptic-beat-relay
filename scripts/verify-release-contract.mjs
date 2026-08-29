@@ -37,5 +37,6 @@ assert.match(deployScript, /--min-replicas 1\s+\\?\n\s*--max-replicas 1/, 'deplo
 assert.match(deployScript, /az containerapp ingress update[\s\S]*--transport http/, 'deployment must pin HTTP ingress for WebSocket upgrades');
 assert.match(deployScript, /active_revisions=.*revision list/, 'deployment must verify there is exactly one active revision');
 assert.match(deployScript, /actual_max=.*maxReplicas/, 'deployment must verify the applied maximum replica count');
+assert.match(deployScript, /tr '\[:upper:\]' '\[:lower:\]'/, 'deployment must normalize Azure ingress transport casing before verification');
 
 console.log('deployment contract ok: one active revision, min/max replicas 1, HTTP ingress');

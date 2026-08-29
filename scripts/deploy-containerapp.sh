@@ -36,8 +36,13 @@ az containerapp ingress update \
 actual_mode="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.activeRevisionsMode' --output tsv)"
 actual_min="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.template.scale.minReplicas' --output tsv)"
 actual_max="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.template.scale.maxReplicas' --output tsv)"
-actual_transport="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.ingress.transport' --output tsv)"
-active_revisions="$(az containerapp revision list --resource-group sociobot --name sf-haptic-beat-relay --query 'length([?properties.active])' --output tsv)"
+actual_transport="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.ingress.transport' --output tsv | tr '[:upper:]' '[:lower:]')"
+active_revisions=0
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  active_revisions="$(az containerapp revision list --resource-group sociobot --name sf-haptic-beat-relay --query 'length([?properties.active])' --output tsv)"
+  [ "$active_revisions" = "1" ] && break
+  sleep 5
+done
 
 if [ "$actual_mode" != "Single" ] || [ "$actual_min" != "1" ] || [ "$actual_max" != "1" ] || [ "$actual_transport" != "http" ] || [ "$active_revisions" != "1" ]; then
   echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport active_revisions=$active_revisions" >&2
