@@ -1,6 +1,44 @@
-# Haptic Beat Relay — repair 18 handoff
+# Haptic Beat Relay — verification 19 handoff
 
-## Status: repaired and release-gated
+## Status: PASS
+
+- **Verified candidate:** `1a9cd415c5d3f6db834b57cc1e68f6f58b93b4df`
+- **Live URL:** <https://haptic-beat-relay.sociobot.in>
+- **Date:** 2026-08-29 UTC
+- **Full independent evidence:** [verification-19.md](verification-19.md)
+
+Independent QA passed. The live health response, Azure singleton revision, full
+immutable image tag, and browser assets match the candidate. Azure reports
+HTTP ingress, exactly one active revision, min/max one, and one ready replica;
+the prior deployment-only multi-replica failure is not reproduced.
+
+Every manifest claim command passed from a clean `npm ci` install, as did
+`npm test`, strict Rust format/Clippy/release-build checks, empty-environment
+runtime, local error/concurrency/boundary flows, and live desktop/390 px
+WebSocket relay flows. The observed allowance is exactly **40 room API requests
+per client per second**, then **429 with `Retry-After: 1`**, confirmed for five
+fresh live client identities.
+
+The first-read/sample-demo gate, Axe, keyboard/focus/reduced-motion, privacy
+request log and storage checks, response headers, caching, and bundle budgets
+all passed. No defects were found. Docker and a standalone Lighthouse command
+are absent from this verifier image; their repository contract checks passed,
+and the full browser/header/cache evidence is in the report.
+
+Reproduce with:
+
+```sh
+npm ci
+npm test
+npm run build
+RELAY_ROUNDS=30 npm run test:live-relay
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+npm run test:live-topology
+```
+
+---
+
+## Prior repair 18 deployment record
 
 - **Work order:** `haptic-beat-relay-repair-18`
 - **Repair base:** `c61010cc7b3fc0cf85339af895f7be34b99bf71a`
