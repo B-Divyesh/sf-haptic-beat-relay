@@ -96,12 +96,14 @@ The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container
 serves the built frontend and relay backend together on `PORT`.
 [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth
 runtime contract: one active revision, exactly one replica, and HTTP ingress
-for WebSocket upgrades. Deploy a revision with
-`npm run deploy -- <full-git-sha>`; it builds in ACR, forces single-revision
-mode, applies the scale and transport settings, and fails unless the active
-revision itself has one ready replica and the live topology, relay, and
-five-client rate-limit checks pass. The supplied SHA must be the exact
-checked-out `HEAD`, so the deployed health identity cannot drift from source.
+for WebSocket upgrades. Finalize `.factory/handoff.md`, commit every release
+file, and push that commit before running
+`npm run deploy -- <full-git-sha>` as the last release step. The command rejects
+a dirty tree, an unpushed commit, or a handoff from an earlier commit. It builds
+in ACR, forces single-revision mode, applies the scale and transport settings,
+and fails unless the active revision itself has one ready replica and the live
+topology, relay, and five-client rate-limit checks pass. Do not make another
+candidate commit after it passes; a later commit needs its own guarded deploy.
 
 ## Project records
 

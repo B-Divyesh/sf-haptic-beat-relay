@@ -37,6 +37,11 @@ const deployScript = readFileSync(new URL('./deploy-containerapp.sh', import.met
 assert.equal(packageJson.scripts.deploy, 'sh scripts/deploy-containerapp.sh', 'the package deployment entry point must use the guarded rollout script');
 assert.match(deployScript, /checked_out_revision=.*git rev-parse --verify HEAD/, 'deployment must resolve the checked-out source identity');
 assert.match(deployScript, /\[ "\$revision" != "\$checked_out_revision" \]/, 'deployment must reject a caller-supplied identity that is not HEAD');
+assert.match(deployScript, /git status --porcelain --untracked-files=all/, 'deployment must reject a dirty release tree');
+assert.match(deployScript, /git rev-parse --verify '@\{upstream\}'/, 'deployment must resolve the pushed release identity');
+assert.match(deployScript, /\[ "\$upstream_revision" != "\$checked_out_revision" \]/, 'deployment must reject an unpushed release');
+assert.match(deployScript, /git log -1 --format=%H -- \.factory\/handoff\.md/, 'deployment must require the final handoff in the released commit');
+assert.match(deployScript, /\[ "\$handoff_revision" != "\$checked_out_revision" \]/, 'deployment must reject a candidate whose handoff predates HEAD');
 assert.match(deployScript, /--min-replicas 1\s+\\?\n\s*--max-replicas 1/, 'deployment must apply the one-replica scale contract');
 assert.match(deployScript, /containerapp revision set-mode[\s\S]*--mode single/, 'deployment must force single active-revision mode before each release');
 assert.match(deployScript, /az containerapp ingress update[\s\S]*--transport http/, 'deployment must pin HTTP ingress for WebSocket upgrades');
@@ -69,7 +74,7 @@ assert.match(
   'deployment must run five fresh-client rate-limit bursts after rollout',
 );
 
-console.log('deployment contract ok: one active revision, min/max replicas 1, HTTP ingress, relay, and repeated rate limits live-checked');
+console.log('deployment contract ok: final pushed identity, one active revision/replica, HTTP ingress, relay, and repeated rate limits live-checked');
 
 const claims = JSON.parse(readFileSync(new URL('../.factory/claims.json', import.meta.url), 'utf8'));
 const claimSources = [

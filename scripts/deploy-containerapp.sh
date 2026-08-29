@@ -23,6 +23,34 @@ if [ "$revision" != "$checked_out_revision" ]; then
   exit 2
 fi
 
+# Deployment is the terminal release step. Verification 15 was caused by
+# deploying an implementation commit, committing the handoff afterwards, and
+# then sending that later candidate through the factory's generic 1-3 replica
+# rollout. Require the final handoff, clean tree, and pushed upstream identity
+# before Azure can be changed so the nominated commit is the guarded commit.
+if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+  echo "Refusing to deploy a dirty worktree. Commit the final handoff and all release files first." >&2
+  exit 2
+fi
+
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+if [ -z "$upstream" ]; then
+  echo "Refusing to deploy without an upstream branch. Push the final release commit first." >&2
+  exit 2
+fi
+
+upstream_revision="$(git rev-parse --verify '@{upstream}')"
+if [ "$upstream_revision" != "$checked_out_revision" ]; then
+  echo "Refusing to deploy unpushed HEAD $checked_out_revision: $upstream is at $upstream_revision" >&2
+  exit 2
+fi
+
+handoff_revision="$(git log -1 --format=%H -- .factory/handoff.md)"
+if [ "$handoff_revision" != "$checked_out_revision" ]; then
+  echo "Refusing to deploy before .factory/handoff.md is finalized in HEAD." >&2
+  exit 2
+fi
+
 short_revision="$(printf %.10s "$revision")"
 
 az acr build \

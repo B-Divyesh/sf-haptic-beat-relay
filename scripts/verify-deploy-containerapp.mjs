@@ -36,11 +36,14 @@ esac
 `, 'utf8');
   writeFileSync(fakeGit, `#!/usr/bin/env sh
 set -eu
-if [ "$*" = "rev-parse --verify HEAD" ]; then
-  printf '%s\\n' "$RELAY_DEPLOY_EXPECTED_REVISION"
-  exit 0
-fi
-exit 2
+case "$*" in
+  "rev-parse --verify HEAD") printf '%s\\n' "$RELAY_DEPLOY_EXPECTED_REVISION" ;;
+  "status --porcelain --untracked-files=all") printf '%s' "\${RELAY_FAKE_DIRTY:-}" ;;
+  "rev-parse --abbrev-ref --symbolic-full-name @{upstream}") printf 'origin/main\\n' ;;
+  "rev-parse --verify @{upstream}") printf '%s\\n' "\${RELAY_FAKE_UPSTREAM_REVISION:-$RELAY_DEPLOY_EXPECTED_REVISION}" ;;
+  "log -1 --format=%H -- .factory/handoff.md") printf '%s\\n' "\${RELAY_FAKE_HANDOFF_REVISION:-$RELAY_DEPLOY_EXPECTED_REVISION}" ;;
+  *) exit 2 ;;
+esac
 `, 'utf8');
   writeFileSync(fakeNpm, `#!/usr/bin/env sh
 set -eu
@@ -123,6 +126,49 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
     'a drifted topology must not run relay or allowance success gates',
   );
 
+  // Reproduce verification 15's release-sequencing root cause: the guarded
+  // implementation was deployed before the handoff commit that became the
+  // nominated candidate. No Azure command may run until that final candidate
+  // is clean, pushed, and contains its handoff.
+  for (const releaseState of [
+    {
+      name: 'dirty worktree',
+      env: { RELAY_FAKE_DIRTY: ' M .factory/handoff.md' },
+      message: /dirty worktree/,
+    },
+    {
+      name: 'unpushed candidate',
+      env: { RELAY_FAKE_UPSTREAM_REVISION: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+      message: /Refusing to deploy unpushed HEAD/,
+    },
+    {
+      name: 'handoff from an earlier commit',
+      env: { RELAY_FAKE_HANDOFF_REVISION: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
+      message: /handoff\.md is finalized in HEAD/,
+    },
+  ]) {
+    const commandsBeforeInvalidRelease = readFileSync(commandLog, 'utf8');
+    const invalidRelease = spawnSync('sh', [deployScript, revision], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        RELAY_DEPLOY_COMMAND_LOG: commandLog,
+        RELAY_DEPLOY_NPM_LOG: npmLog,
+        RELAY_DEPLOY_EXPECTED_REVISION: revision,
+        ...releaseState.env,
+      },
+    });
+    assert.equal(invalidRelease.status, 2, `${releaseState.name} must be rejected before deployment`);
+    assert.match(invalidRelease.stderr, releaseState.message, `${releaseState.name} must explain the recovery`);
+    assert.equal(
+      readFileSync(commandLog, 'utf8'),
+      commandsBeforeInvalidRelease,
+      `${releaseState.name} must not call Azure`,
+    );
+  }
+
   const commandsBeforeMismatch = readFileSync(commandLog, 'utf8');
   const mismatch = spawnSync('sh', [deployScript, 'fedcba9876543210fedcba9876543210fedcba98'], {
     cwd: root,
@@ -139,7 +185,7 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
   assert.match(mismatch.stderr, /does not match checked-out HEAD/, 'the rejected identity must explain the recovery');
   assert.equal(readFileSync(commandLog, 'utf8'), commandsBeforeMismatch, 'a mismatched identity must not call Azure');
 
-console.log('deployment command regression passed: singleton scale, post-rollout HTTP ingress, and all live gates are enforced');
+console.log('deployment command regression passed: final pushed identity, singleton topology, and all live gates are enforced');
 } finally {
   rmSync(tempDirectory, { recursive: true, force: true });
 }
