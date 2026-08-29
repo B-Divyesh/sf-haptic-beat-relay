@@ -17,3 +17,17 @@ assert.doesNotMatch(
 );
 
 console.log(`release contract ok: ${rustBuilder[1]}`);
+
+const deployment = JSON.parse(readFileSync(new URL('../deploy/containerapp.json', import.meta.url), 'utf8'));
+assert.equal(deployment.containerApp, 'sf-haptic-beat-relay');
+assert.equal(deployment.activeRevisionsMode, 'Single');
+assert.deepEqual(
+  deployment.scale,
+  { minReplicas: 1, maxReplicas: 1 },
+  'the process-local ephemeral room store requires exactly one live replica',
+);
+
+const deployScript = readFileSync(new URL('./deploy-containerapp.sh', import.meta.url), 'utf8');
+assert.match(deployScript, /--min-replicas 1\s+\\?\n\s*--max-replicas 1/, 'deployment must apply the one-replica scale contract');
+
+console.log('deployment contract ok: active revisions Single; min/max replicas 1');

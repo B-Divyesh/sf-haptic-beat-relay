@@ -1,0 +1,11 @@
+{
+  "resourceGroup": "sociobot",
+  "containerApp": "sf-haptic-beat-relay",
+  "registry": "sociobotregistry",
+  "imageRepository": "sf-haptic-beat-relay",
+  "activeRevisionsMode": "Single",
+  "scale": {
+    "minReplicas": 1,
+    "maxReplicas": 1
+  }
+}

@@ -142,6 +142,52 @@ test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue,
   await companionContext.close();
 });
 
+test('regression: repeated independent host and companion connections always create, join, and complete a round', async ({ browser }) => {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const hostContext = await browser.newContext();
+    const companionContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const companion = await companionContext.newPage();
+
+    await host.goto('/host');
+    const code = await host.locator('#room-code').textContent();
+    expect(code, `room ${attempt} has a code`).toMatch(/^[A-Z0-9]{6}$/);
+    await companion.goto(`/join/${code}`);
+    await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+
+    await host.locator('#bpm').fill('180');
+    await host.getByRole('button', { name: 'Start 60-second round' }).click();
+    await expect(companion.getByRole('button', { name: /Tap the beat/ })).toBeEnabled();
+    await companion.getByRole('button', { name: /Tap the beat/ }).click();
+    await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
+    await expect(companion.locator('#score-value')).toHaveText(await host.locator('#score-value').textContent() ?? '0%');
+
+    await hostContext.close();
+    await companionContext.close();
+  }
+});
+
+test('regression: independent API request contexts never alternate room_not_found after create', async ({ playwright }) => {
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    const client = `198.51.100.${attempt}`;
+    const creator = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:8080' });
+    const created = await creator.post('/api/rooms', { headers: { 'X-Forwarded-For': client } });
+    expect(created.status()).toBe(200);
+    const { code } = await created.json() as { code: string };
+    await creator.dispose();
+
+    const firstJoiner = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:8080' });
+    const firstJoin = await firstJoiner.post(`/api/rooms/${code}/join`, { headers: { 'X-Forwarded-For': client } });
+    expect(firstJoin.status(), `first independent join for room ${code}`).toBe(200);
+    await firstJoiner.dispose();
+
+    const secondJoiner = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:8080' });
+    const secondJoin = await secondJoiner.post(`/api/rooms/${code}/join`, { headers: { 'X-Forwarded-For': client } });
+    expect(secondJoin.status(), `second independent join for room ${code}`).toBe(409);
+    await secondJoiner.dispose();
+  }
+});
+
 test('service-worker-only offline reload keeps the built shell and manifest available', async ({ page, context }) => {
   await page.goto('/demo');
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');

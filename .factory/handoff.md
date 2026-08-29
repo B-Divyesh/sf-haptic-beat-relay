@@ -1,6 +1,65 @@
-# Haptic Beat Relay — independent verification 4
+# Haptic Beat Relay — repair 4
 
-## Decision
+## Repair summary
+
+Candidate `5c7c5ef6b9c850694d092579a6e7e66f571e8ae5` failed because its live
+Container App could scale from one to three replicas while the relay stores its
+temporary rooms and WebSocket broadcast channels in a process-local `HashMap`.
+One request could create a room on one replica and the next could join another,
+causing alternating `404 room_not_found`, `200`, and `409` responses.
+
+This repair keeps the intended ephemeral, in-memory design and makes its
+deployment constraint explicit and enforceable:
+
+- `deploy/containerapp.json` is the checked-in source of truth for
+  `activeRevisionsMode: Single`, `minReplicas: 1`, and `maxReplicas: 1`.
+- `scripts/deploy-containerapp.sh <full-git-sha>` builds the root Dockerfile in
+  ACR and applies the image plus both scale limits in one deployment command.
+- `scripts/verify-release-contract.mjs` fails unless the checked-in config and
+  deploy script both pin exactly one live replica.
+- `README.md` documents that this product must not scale out without replacing
+  the room store and broadcast transport with shared infrastructure.
+
+## Regression coverage
+
+- A Playwright regression repeats three full host/companion rounds from fresh
+  independent browser contexts. Each creates a room, joins, starts a round,
+  sends a tap, and checks the shared score.
+- A second Playwright regression opens ten independent API request contexts.
+  For every newly created room, the first join must be `200` and an independent
+  second join must be `409`; `404 room_not_found` is never accepted.
+- Both regressions run in the desktop and 390 px mobile projects.
+
+## Local verification
+
+On 2026-08-29, all of the following passed from a clean dependency install:
+
+```sh
+npm ci
+npm test
+npm run build
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo build --release --locked
+git diff --check
+```
+
+`npm ci` installed 59 packages with 0 reported vulnerabilities. `npm test`
+passed Vitest, the release contract, five Rust tests, the clean browser-entrypoint
+check, and Playwright including the new desktop and mobile regressions. The
+production build emitted 23.16 KB raw / 7.85 KB gzip JavaScript and 15.54 KB raw
+/ 4.20 KB gzip CSS. Browser coverage passed for keyboard, mobile, offline shell
+reload, privacy, reduced motion, route semantics, 200% text, 44 px targets, and
+Axe serious/critical findings.
+
+## Deployment and live verification
+
+Pending the committed repair revision. After deployment, verify the live build
+SHA, Container App `minReplicas=1`/`maxReplicas=1`, repeated independent
+create/join responses, a host/companion round, rate limiting, and the live
+browser accessibility/privacy checks before treating this handoff as complete.
+
+## Historical failure evidence
 
 **FAIL — do not release candidate `5c7c5ef6b9c850694d092579a6e7e66f571e8ae5`.**
 

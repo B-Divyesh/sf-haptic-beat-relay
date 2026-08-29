@@ -49,7 +49,7 @@ It removes only the generated `frontend/dist` directory, runs the exact previous
 - The companion uses phone vibration or a connected gamepad when supported.
 - The screen flashes each cue when vibration is unavailable.
 
-Rooms expire after two hours and disappear on server restart. The service has no database, user accounts, music catalog, tracking script, or payment code.
+Rooms expire after two hours and disappear on server restart. The relay intentionally runs as exactly one Container App replica because its temporary room and WebSocket state are held in that process. The checked-in deployment contract pins both the minimum and maximum to one; it must not be scaled out without moving room state and broadcast delivery to a shared service. The service has no database, user accounts, music catalog, tracking script, or payment code.
 
 ## Container
 
@@ -63,7 +63,7 @@ The multi-stage image runs as a non-root user. `/health` reports the build SHA. 
 
 ## Deploy
 
-The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`.
+The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth scale contract: active revisions are single and both `minReplicas` and `maxReplicas` are `1`. Deploy a revision with `scripts/deploy-containerapp.sh <full-git-sha>`; it builds in ACR and reapplies that scale constraint.
 
 ## Project records
 
