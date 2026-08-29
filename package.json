@@ -11,6 +11,7 @@
     "test:release-contract": "node scripts/verify-release-contract.mjs",
     "test:browser": "npm run build && playwright test",
     "test:clean-entrypoint": "node scripts/verify-clean-browser-entrypoint.mjs",
+    "test:live-relay": "node scripts/verify-live-relay.mjs",
     "test": "npm run test:unit && npm run test:release-contract && cargo test && npm run test:clean-entrypoint && playwright test"
   },
   "devDependencies": {

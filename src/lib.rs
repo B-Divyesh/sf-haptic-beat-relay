@@ -549,6 +549,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn regression_p0_separate_process_room_state_reproduces_the_websocket_404() {
+        // This is the production failure reported in verification 5: the HTTP
+        // create reaches one process but the WebSocket upgrade reaches another
+        // process with a different in-memory room map. The deployment contract
+        // is therefore required to keep exactly one process/revision live.
+        let creator_process = app("frontend/dist");
+        let created = creator_process
+            .clone()
+            .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let room: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(created.into_body(), 4096)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let code = room["code"].as_str().unwrap();
+        let token = room["host_token"].as_str().unwrap();
+
+        let creator_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let creator_address = creator_listener.local_addr().unwrap();
+        let creator_server = tokio::spawn(async move {
+            axum::serve(creator_listener, creator_process)
+                .await
+                .unwrap();
+        });
+        let other_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let other_address = other_listener.local_addr().unwrap();
+        let other_server = tokio::spawn(async move {
+            axum::serve(other_listener, app("frontend/dist"))
+                .await
+                .unwrap();
+        });
+
+        let secondary_result = tokio_tungstenite::connect_async(format!(
+            "ws://{other_address}/api/rooms/{code}/socket?role=host&token={token}"
+        ))
+        .await;
+        match secondary_result {
+            Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
+                assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            }
+            other => panic!("the separate process must reject the upgrade with 404, got {other:?}"),
+        }
+
+        let creator_result = tokio_tungstenite::connect_async(format!(
+            "ws://{creator_address}/api/rooms/{code}/socket?role=host&token={token}"
+        ))
+        .await;
+        assert!(
+            creator_result.is_ok(),
+            "the room-owning process must accept the upgrade"
+        );
+        creator_server.abort();
+        other_server.abort();
+    }
+
+    #[tokio::test]
     async fn rate_limit_uses_forwarded_client_ip() {
         let application = app("frontend/dist");
         let mut last = StatusCode::OK;

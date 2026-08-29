@@ -40,6 +40,15 @@ npm run test:clean-entrypoint
 
 It removes only the generated `frontend/dist` directory, runs the exact previously failing claim command, and checks that the browser entry point rebuilt the app.
 
+To exercise the deployed relay boundary, run the fresh desktop-host and 390 px
+companion regression against the live URL. It performs 30 create, connect, cue,
+tap, and shared-score rounds and fails on a room-not-open state, failed
+WebSocket handshake, or browser error:
+
+```sh
+npm run test:live-relay
+```
+
 ## How it works
 
 - `POST /api/rooms` opens an in-memory room and returns a six-character code.
@@ -63,7 +72,7 @@ The multi-stage image runs as a non-root user. `/health` reports the build SHA. 
 
 ## Deploy
 
-The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth scale contract: active revisions are single and both `minReplicas` and `maxReplicas` are `1`. Deploy a revision with `scripts/deploy-containerapp.sh <full-git-sha>`; it builds in ACR and reapplies that scale constraint.
+The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth runtime contract: one active revision, exactly one replica, and HTTP ingress for WebSocket upgrades. Deploy a revision with `scripts/deploy-containerapp.sh <full-git-sha>`; it builds in ACR, applies those settings, then queries Azure and fails unless they are live.
 
 ## Project records
 

@@ -4,6 +4,9 @@
   "registry": "sociobotregistry",
   "imageRepository": "sf-haptic-beat-relay",
   "activeRevisionsMode": "Single",
+  "ingress": {
+    "transport": "http"
+  },
   "scale": {
     "minReplicas": 1,
     "maxReplicas": 1

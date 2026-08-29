@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
-# Deploy the relay with the one-replica contract required by its ephemeral,
-# process-local room store. The live service must never be allowed to scale out.
+# Deploy the relay with the one-process contract required by its ephemeral,
+# process-local room store. The post-deploy checks are deliberate: a desired
+# setting in source does not make separately routed HTTP and WebSocket traffic
+# coherent unless Azure has applied it to the live revision.
 set -eu
 
 revision="${1:-$(git rev-parse --verify HEAD)}"
@@ -23,3 +25,23 @@ az containerapp update \
   --image "sociobotregistry.azurecr.io/sf-haptic-beat-relay:$revision" \
   --min-replicas 1 \
   --max-replicas 1
+
+# WebSocket upgrades use HTTP/1.1. Pinning the ingress transport avoids an
+# implicit protocol choice while the single process owns the room map.
+az containerapp ingress update \
+  --resource-group sociobot \
+  --name sf-haptic-beat-relay \
+  --transport http
+
+actual_mode="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.activeRevisionsMode' --output tsv)"
+actual_min="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.template.scale.minReplicas' --output tsv)"
+actual_max="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.template.scale.maxReplicas' --output tsv)"
+actual_transport="$(az containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query 'properties.configuration.ingress.transport' --output tsv)"
+active_revisions="$(az containerapp revision list --resource-group sociobot --name sf-haptic-beat-relay --query 'length([?properties.active])' --output tsv)"
+
+if [ "$actual_mode" != "Single" ] || [ "$actual_min" != "1" ] || [ "$actual_max" != "1" ] || [ "$actual_transport" != "http" ] || [ "$active_revisions" != "1" ]; then
+  echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport active_revisions=$active_revisions" >&2
+  exit 1
+fi
+
+echo "Relay deployment contract verified: one active revision, one replica, HTTP ingress."
