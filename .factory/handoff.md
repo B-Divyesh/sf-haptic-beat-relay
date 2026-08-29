@@ -1,63 +1,64 @@
-# Haptic Beat Relay — verification handoff
+# Haptic Beat Relay — repair handoff
 
-## Status: FAIL
+## Status: PASS
 
-Candidate `ed2fa4c3de1c4e4b2dc253b6d40102e1f15a3651` at
-<https://haptic-beat-relay.sociobot.in> is **not releasable**. Full evidence is
-in [verification-6.md](verification-6.md).
+Repair commit `3db7014255ada986600b2380e7111cd8c65a6a32` is pushed and deployed
+to <https://haptic-beat-relay.sociobot.in>. It repairs all verification-6
+release blockers without changing the researched product flow.
 
-## Release blockers
+## Repair
 
-- The running revision has three ready replicas (`maxReplicas: 3`, ingress
-  `Auto`) while rooms and WebSocket channels live only in process memory. Only
-  1 of 10 fresh desktop-host/390 px-companion cue rounds completed; nine failed
-  with room-not-open or WebSocket 404 errors.
-- The exact `@claim:rate-limit` command fails because both Playwright projects
-  share an app-wide 40-request bucket. `npm test` fails three browser tests for
-  the same reason.
-- Live per-client limiting is multiplied by the three replicas: 45 requests
-  were all accepted; 150 produced 120 successes and 30 responses with 429 plus
-  `Retry-After: 1`. The documented allowance is 40.
+- Removed the app-wide rate bucket. Room APIs now have the documented 40
+  requests/second allowance for each first `X-Forwarded-For` client. Stale
+  one-second entries are pruned instead of creating a cross-client quota.
+- Added an exact 45-request / `Retry-After: 1` regression and a concurrent
+  100-distinct-client regression. Browser tests use isolated forwarded client
+  identities, so the exact claim and full suite cannot consume one another.
+- Kept the intentionally in-memory room relay, but made its singleton runtime
+  contract durable: deployment forces Single revision mode and HTTP ingress,
+  creates a one-replica revision, and fails unless that active revision has one
+  ready running replica. This prevents HTTP/WebSocket requests landing on
+  separate room maps.
+- Removed the non-indexable `/404` page from `sitemap.xml`.
 
-## What passed
+## Verification evidence
 
-- The live health SHA and built JS/CSS match the candidate exactly.
-- The cold first-read and one-click sample demo pass.
-- Eleven of twelve exact claim commands pass after `npm ci`.
-- TypeScript/Vite build, Rust tests outside the failing browser orchestration,
-  formatting, Clippy, and locked release build pass.
-- Static accessibility, keyboard, 390 px layout, touch targets, reduced motion,
-  privacy request logging, local audio containment, security headers, cache
-  policy, and service-worker offline reload pass.
-- Mobile Lighthouse: 99 performance and 100 for accessibility, best practices,
-  and SEO; LCP 1.5 s, CLS 0, TBT 100 ms.
+- `npm ci`: pass (60 audited packages, 0 vulnerabilities).
+- All 12 exact commands in `.factory/claims.json`: pass after clean install.
+  In particular, `npm run test:browser -- --grep @claim:rate-limit` passes in
+  desktop and 390 px mobile projects.
+- `npm test`: pass — Vitest (3), Rust tests (9), clean-browser-entrypoint, and
+  Playwright (32 desktop/mobile checks). This includes keyboard, Axe serious /
+  critical checks, privacy/local-audio request capture, 390 px touch targets,
+  service-worker offline reload, reduced motion, and error recovery.
+- `npm run build`, `cargo fmt --all -- --check`,
+  `cargo clippy --all-targets --all-features --locked -- -D warnings`, and
+  `cargo build --release --locked`: pass. Local Docker was unavailable; the
+  successful ACR deployment built the production image.
+- Production-binary and live 45-request tests: exactly 40 accepted, then 5
+  `429` responses with `Retry-After: 1`.
+- `npm run test:live-relay`: completed 30 fresh desktop-host / 390 px-companion
+  rounds, asserting cue, returned tap, matching score, and no room/WebSocket
+  fault in every round.
+- Live identity and topology: `/health` returned the deployed build SHA;
+  revision `sf-haptic-beat-relay--r3db7014255` has 100% traffic, `min=1`,
+  `max=1`, HTTP ingress, and one ready `Running` replica. Live response policy
+  also returned the expected no-cache HTML, CSP, nosniff, and Referrer-Policy
+  headers.
 
-## Reproduce
+## Run and verify
 
 ```sh
 npm ci
-npm run test:browser -- --grep @claim:rate-limit
 npm test
 npm run build
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo build --release --locked
 npm run test:live-relay
+scripts/deploy-containerapp.sh <full-git-sha>
 ```
 
-Read-only live configuration:
-
-```sh
-az containerapp show -g sociobot -n sf-haptic-beat-relay
-az containerapp revision list -g sociobot -n sf-haptic-beat-relay
-az containerapp replica list -g sociobot -n sf-haptic-beat-relay \
-  --revision sf-haptic-beat-relay--0000013
-```
-
-## Next step
-
-Enforce a single live replica with coherent WebSocket routing, or introduce a
-shared ephemeral room transport. Remove or redesign the global limiter so the
-documented per-client 40-request allowance is stable. Redeploy, then rerun all
-claims, the full suite, 30 fresh browser relay rounds, and the live rate-limit
-check before release.
+The product deliberately remains a single-replica ephemeral relay. Do not
+scale it out until rooms, broadcast delivery, and rate limiting move to shared
+infrastructure.
