@@ -1,0 +1,302 @@
+CLAIM 1 demo-sandbox: npm run test:browser -- --grep @claim:demo-sandbox
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 327ms
+[WebServer]    Compiling haptic-beat-relay v1.0.0 (/work/repo)
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.26s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:3429) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3430) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3430) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3429) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:54:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (14.4s)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:54:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (14.5s)
+
+  2 passed (25.8s)
+RESULT	demo-sandbox	0	.factory/evidence/verification-7/claims/1-demo-sandbox.log
+CLAIM 2 sample-duration: npm run test:browser -- --grep @claim:sample-duration
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 314ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.37s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:3647) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3653) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3647) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3653) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:54:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (14.5s)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:54:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (14.4s)
+
+  2 passed (19.7s)
+RESULT	sample-duration	0	.factory/evidence/verification-7/claims/2-sample-duration.log
+CLAIM 3 local-audio: npm run test:browser -- --grep @claim:local-audio
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 372ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:3886) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3887) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3886) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3887) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:74:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (1.7s)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:74:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (1.7s)
+
+  2 passed (6.3s)
+RESULT	local-audio	0	.factory/evidence/verification-7/claims/3-local-audio.log
+CLAIM 4 no-third-party: npm run test:browser -- --grep @claim:no-third-party
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 363ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:4116) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4117) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4116) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4117) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:74:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (1.5s)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:74:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (1.9s)
+
+  2 passed (6.2s)
+RESULT	no-third-party	0	.factory/evidence/verification-7/claims/4-no-third-party.log
+CLAIM 5 no-account: npm run test:browser -- --grep @claim:no-account
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 340ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:4361) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4360) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4361) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4360) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:121:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (1.3s)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:121:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (1.7s)
+
+  2 passed (6.5s)
+RESULT	no-account	0	.factory/evidence/verification-7/claims/5-no-account.log
+CLAIM 6 free-use: npm run test:browser -- --grep @claim:free-use
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 340ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:4584) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4590) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4590) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4584) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:121:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (1.4s)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:121:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (1.6s)
+
+  2 passed (6.0s)
+RESULT	free-use	0	.factory/evidence/verification-7/claims/6-free-use.log
+CLAIM 7 shared-score: npm run test:browser -- --grep @claim:shared-score
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 357ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:4810) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4809) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4810) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4809) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:128:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (5.4s)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:128:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (6.1s)
+
+  2 passed (10.4s)
+RESULT	shared-score	0	.factory/evidence/verification-7/claims/7-shared-score.log
+CLAIM 8 ephemeral-rooms: cargo test claim_ephemeral_rooms_evict_after_the_configured_ttl_and_on_restart
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/debug/deps/haptic_beat_relay-2214806026ab2323)
+
+running 1 test
+test tests::claim_ephemeral_rooms_evict_after_the_configured_ttl_and_on_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.16s
+
+     Running unittests src/main.rs (target/debug/deps/haptic_beat_relay-e9d88af8becf3a35)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+RESULT	ephemeral-rooms	0	.factory/evidence/verification-7/claims/8-ephemeral-rooms.log
+CLAIM 9 rate-limit: npm run test:browser -- --grep @claim:rate-limit
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 332ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:5106) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5107) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5107) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5106) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:97:1 › @claim:rate-limit API bursts enforce exactly 40 requests and return Retry-After (937ms)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:97:1 › @claim:rate-limit API bursts enforce exactly 40 requests and return Retry-After (890ms)
+
+  2 passed (5.3s)
+RESULT	rate-limit	0	.factory/evidence/verification-7/claims/9-rate-limit.log
+CLAIM 10 health: npm run test:browser -- --grep @claim:health
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 314ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:5304) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5310) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5304) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5310) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:108:1 › @claim:health health endpoint returns the build identity (326ms)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:108:1 › @claim:health health endpoint returns the build identity (202ms)
+
+  2 passed (5.1s)
+RESULT	health	0	.factory/evidence/verification-7/claims/10-health.log
+CLAIM 11 connection-required: npm run test:browser -- --grep @claim:connection-required
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 343ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:5497) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5498) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5497) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5498) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:114:1 › @claim:connection-required the real relay explains an offline failure (1.9s)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:114:1 › @claim:connection-required the real relay explains an offline failure (2.0s)
+
+  2 passed (6.5s)
+RESULT	connection-required	0	.factory/evidence/verification-7/claims/11-connection-required.log
+CLAIM 12 visual-cue: npm run test:browser -- --grep @claim:visual-cue
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-DssFcfwD.css  15.54 kB │ gzip: 4.20 kB
+dist/assets/index-ChbPiOug.js   23.16 kB │ gzip: 7.85 kB │ map: 44.22 kB
+✓ built in 345ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:5723) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5729) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5723) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5729) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:128:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (5.7s)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:128:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (6.7s)
+
+  2 passed (11.2s)
+RESULT	visual-cue	0	.factory/evidence/verification-7/claims/12-visual-cue.log

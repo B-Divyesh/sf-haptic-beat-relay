@@ -1,0 +1,20 @@
+[
+  {
+    "name": "sf-haptic-beat-relay--0000014-595d7bd6db-c5bcr",
+    "ready": true,
+    "started": true,
+    "state": "Running"
+  },
+  {
+    "name": "sf-haptic-beat-relay--0000014-595d7bd6db-hc7k5",
+    "ready": true,
+    "started": true,
+    "state": "Running"
+  },
+  {
+    "name": "sf-haptic-beat-relay--0000014-595d7bd6db-jh969",
+    "ready": true,
+    "started": true,
+    "state": "Running"
+  }
+]

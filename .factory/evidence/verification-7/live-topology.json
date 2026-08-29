@@ -1,0 +1,7 @@
+{
+  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:39234467eae0",
+  "latest": "sf-haptic-beat-relay--0000014",
+  "max": 3,
+  "min": 1,
+  "transport": "Auto"
+}
