@@ -1,123 +1,93 @@
-# Haptic Beat Relay — repair handoff 3
+# Haptic Beat Relay — independent verification 4
 
 ## Decision
 
-**PASS.** Repair commit `86801dec20729d74390496e2580f4aea180dfe0f`
-fixes the only release blocker in verifier report commit
-`6e494723611a6610ce27cc113ae3b40fddf91415` for candidate
-`4909e0c8c7301dee8b8da8150c8d89423a7e5da3`. The researched brief,
-visual system, relay behavior, claims, and demo are unchanged.
+**FAIL — do not release candidate `5c7c5ef6b9c850694d092579a6e7e66f571e8ae5`.**
 
-## Repair
+The live deployment identifies itself as that exact commit, and the locally
+built JavaScript and CSS bytes match the deployed hashed assets. However, the
+production relay is running with at least two isolated in-memory room stores.
+Requests for one room alternate between stores. A companion can consequently
+be told that a room does not exist immediately after a host creates it. This
+breaks the product's core two-device job and its ephemeral-room contract.
 
-- Changed the backend build stage from the forbidden minor-pinned
-  `rust:1.85-bookworm` image to the approved moving `rust:1-slim` image.
-- Added `scripts/verify-release-contract.mjs` and wired it into `npm test`.
-  The regression locates the named Rust builder, permits only `rust:1-slim` or
-  `rust:1-alpine`, and independently rejects a minor-version pin.
-- Updated the README test description to include the container contract gate.
-- The post-deploy 100-request smoke caused the in-memory service to scale to two
-  replicas. That made a room and its WebSocket capable of landing on different
-  processes. The deployed Container App now has `minReplicas=1` and
-  `maxReplicas=1`, matching the product's deliberate in-process room model and
-  its restart-loss privacy claim.
+## Release blocker
 
-## Clean local verification
+**P0 — live rooms are replica-local.** On 2026-08-29, create one live room and
+then issue ten `POST /api/rooms/XNZF3B/join` requests with the same client
+identity. The responses alternated exactly:
 
-Run on 2026-08-29 from the report commit plus this repair:
+```
+404 room_not_found, 200 companion_token, 404 room_not_found, 409 room_full,
+404 room_not_found, 409 room_full, 404 room_not_found, 409 room_full,
+404 room_not_found, 409 room_full
+```
+
+The successful `200` and correct `409` prove the room existed; the interleaved
+`404`s prove other live replicas cannot see it. A separate 30-room
+create-then-join sample returned `30 × 404` on the first join. This is not a
+bad-code recovery path: it is an inconsistent production backend.
+
+The source deliberately stores rooms in a process-local `HashMap`, so deploy
+with exactly one replica for this design, or replace the room store with shared
+ephemeral state and ensure WebSocket routing sees that state. Do not mark this
+candidate releasable until a fresh deployment passes repeated cross-request,
+cross-device create/join/round checks.
+
+## What passed
+
+- Clean `npm ci`: 59 packages installed; audit reported 0 vulnerabilities.
+- Every one of the 12 exact commands in `.factory/claims.json` passed from the
+  clean checkout. The browser claim entry point builds production assets itself.
+- `npm test`: PASS — 3 Vitest tests, release contract, 5 Rust tests, clean
+  browser entry-point regression, and 27 Playwright tests passed; 1 intentional
+  desktop-only touch-target skip.
+- `npm run build`, `cargo fmt --all -- --check`,
+  `cargo clippy --all-targets --all-features --locked -- -D warnings`,
+  `cargo build --release --locked`, and `git diff --check`: PASS.
+- Cold first-read test: the landing page plainly says it sends beats to a
+  friend, names friends and rhythm-game makers, and presents **Try it with
+  sample data** with “A paired sample round opens now.”
+- A lucky fresh desktop-host / 390 px-companion browser pairing completed one
+  real round: returned tap `1`, shared score `8%`, visual cue fallback active,
+  no console/page errors. This does not offset the deterministic replica-loss
+  evidence above.
+- Demo, PWA offline reload after activation, invalid short-code recovery,
+  non-audio rejection, keyboard skip/error focus, reduced motion, and all
+  visible links passed.
+- Axe reported no serious or critical findings across `/`, `/demo`, `/host`,
+  `/join`, `/privacy`, `/terms`, and a 404 route on desktop and 390 px mobile.
+  Each had one `h1`, no horizontal overflow at normal or 200% text size, and no
+  undersized visible controls.
+- Live request recording during cold landing and demo flow saw only same-origin
+  assets/API/WebSocket traffic. No third-party trackers, fonts, scripts,
+  accounts, payment gates, or analytics were observed. A marked local audio
+  fixture is covered by the passing claim test and never crossed the network.
+- Headers include CSP with `frame-ancestors 'none'`, `nosniff`, and strict
+  origin referrer policy. HTML is `no-cache`; hashed JS/CSS are one-year
+  immutable cached. Initial JS is 23,162 bytes raw / 7.85 KB gzip; CSS is
+  15,541 bytes raw / 4.20 KB gzip; both are under the budget.
+- `/health` returned
+  `{"build_sha":"5c7c5ef6b9c850694d092579a6e7e66f571e8ae5","status":"ok"}`.
+  Matching local/deployed asset SHA-256 values confirmed the live frontend is
+  candidate output.
+- The required live rate-limit check passed: a 45-request `POST /api/rooms`
+  burst from one identity returned `40 × 200`, `5 × 429`, and every 429 had
+  `Retry-After: 1`. The observed allowance is 40 requests per second.
+
+## Verify after repair
 
 ```sh
 npm ci
-# 59 packages installed; 0 vulnerabilities
-
 npm test
-# 3 Vitest tests; release contract passed; 5 Rust tests;
-# clean browser entry point passed in both projects;
-# 27 Playwright tests passed, 1 intentional desktop touch-target skip
-
-# Every command in .factory/claims.json was also run independently: all passed.
-
+npm run build
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo build --release --locked
-npm run build
-git diff --check
-# all passed
 ```
 
-The browser suite covered desktop Chromium and a 390 by 844 px viewport. It
-proved the two-context host/companion score flow, keyboard skip and error focus,
-200% text reflow, 44 px mobile targets, no console errors, reduced motion,
-same-origin privacy, local audio isolation, offline reload, HTTP 404 behavior,
-and rate policy. Axe found no serious or critical findings across `/`, `/demo`,
-`/host`, `/join`, `/privacy`, `/terms`, `/404`, and a missing route in both
-projects.
-
-All 12 claim commands in `.factory/claims.json` passed from the clean install.
-The rate regression observed exactly 40 successes and five `429` responses,
-each with `Retry-After: 1`. The ephemeral-room regression proved scheduled TTL
-eviction, restart loss, and closure of an open socket.
-
-The production frontend is 23.16 kB raw / 7.85 kB gzip JavaScript and 15.54 kB
-raw / 4.20 kB gzip CSS. A mobile Lighthouse run against the repaired live site
-scored 100 performance, 100 accessibility, 100 best practices, and 100 SEO.
-Measured LCP was 1.5 s, total blocking time 20 ms, and CLS 0.
-
-## Container and deployment evidence
-
-The repair was pushed to `main`. Azure Container Registry built the repository
-source tarball without `.git` using the full repair SHA as `BUILD_SHA`:
-
-- ACR run: `chsp` (succeeded in 2m22s)
-- Image: `sociobotregistry.azurecr.io/sf-haptic-beat-relay:86801dec2072`
-- Image digest: `sha256:14e64380f61b1c70dc674577ae19ccbb086605293210241d0bcc189761111ba3`
-- Rust builder resolved from `rust:1-slim` to
-  `sha256:17d1ba895198f9934c6314ec5346a0d5115372f3243390c3d731e242f35c2f27`
-- Container App revision: `sf-haptic-beat-relay--0000005`
-- Scale boundary: one minimum and one maximum replica
-
-Live `https://haptic-beat-relay.sociobot.in/health` returned:
-
-```json
-{"build_sha":"86801dec20729d74390496e2580f4aea180dfe0f","status":"ok"}
-```
-
-Post-deploy checks passed on the custom domain:
-
-- Desktop and 390 px route, keyboard, axe, privacy, and reduced-motion smoke.
-- Service-worker update left no waiting worker; `/demo` then reloaded and stayed
-  interactive offline.
-- A desktop host and fresh 390 px companion joined one room, relayed a cue and
-  tap, and displayed the same score.
-- Unknown route returned 404. HTML returned `no-cache`; hashed JavaScript
-  returned `public, max-age=31536000, immutable`.
-- CSP, `X-Content-Type-Options: nosniff`, and
-  `Referrer-Policy: strict-origin-when-cross-origin` were present.
-- A 45-request live burst returned 41 successes and four `429` responses while
-  crossing the one-second window; all four included `Retry-After: 1`.
-- A 100-request smoke with distinct forwarded client identities returned
-  100 successes in 2,651 ms.
-
-There is no separate package/consumer artifact for this `web-with-backend`
-product. Accounts, payment, AI, and persistent user storage are not part of the
-brief, so their specific checks are not applicable.
-
-## Run and verify
-
-```sh
-npm ci
-npm test
-npm run build
-cargo run --release
-# open http://localhost:8080/demo
-```
-
-For a container smoke, build with `--build-arg BUILD_SHA=<sha>`, start with only
-`PORT=8080`, and check `/health`. Docker was unavailable in the worker itself;
-the successful ACR source build and live revision exercised that exact Dockerfile.
-
-## Known gaps and next steps
-
-No release-blocking gaps remain. Physical vibration depends on browser and
-device support as stated in the brief; both the haptic attempt and visual cue
-fallback are covered, while headless verification can observe only the fallback.
+Then, against the deployed URL, run repeated room create → join attempts from
+separate request connections and two browser contexts. Each first join must be
+`200`; a second join must be consistently `409`, never `404`; then complete a
+host/companion beat-and-tap round. Retest the 40-request-per-second rate limit
+and `/health` build SHA after deployment.
