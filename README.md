@@ -87,7 +87,7 @@ The multi-stage image runs as a non-root user. `/health` reports the build SHA. 
 
 ## Deploy
 
-The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth runtime contract: one active revision, exactly one replica, and HTTP ingress for WebSocket upgrades. Deploy a revision with `scripts/deploy-containerapp.sh <full-git-sha>`; it builds in ACR, forces single-revision mode, applies the scale and transport settings, and fails unless the active revision itself has one ready replica.
+The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth runtime contract: one active revision, exactly one replica, and HTTP ingress for WebSocket upgrades. Deploy a revision with `npm run deploy -- <full-git-sha>`; it builds in ACR, forces single-revision mode, applies the scale and transport settings, and fails unless the active revision itself has one ready replica and the live topology and relay checks pass.
 
 ## Project records
 

@@ -19,6 +19,7 @@ assert.doesNotMatch(
 console.log(`release contract ok: ${rustBuilder[1]}`);
 
 const deployment = JSON.parse(readFileSync(new URL('../deploy/containerapp.json', import.meta.url), 'utf8'));
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 assert.equal(deployment.containerApp, 'sf-haptic-beat-relay');
 assert.equal(deployment.activeRevisionsMode, 'Single');
 assert.deepEqual(
@@ -33,6 +34,7 @@ assert.deepEqual(
 );
 
 const deployScript = readFileSync(new URL('./deploy-containerapp.sh', import.meta.url), 'utf8');
+assert.equal(packageJson.scripts.deploy, 'sh scripts/deploy-containerapp.sh', 'the package deployment entry point must use the guarded rollout script');
 assert.match(deployScript, /--min-replicas 1\s+\\?\n\s*--max-replicas 1/, 'deployment must apply the one-replica scale contract');
 assert.match(deployScript, /containerapp revision set-mode[\s\S]*--mode single/, 'deployment must force single active-revision mode before each release');
 assert.match(deployScript, /az containerapp ingress update[\s\S]*--transport http/, 'deployment must pin HTTP ingress for WebSocket upgrades');

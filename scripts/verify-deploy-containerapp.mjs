@@ -1,0 +1,86 @@
+import assert from 'node:assert/strict';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+const root = resolve(new URL('..', import.meta.url).pathname);
+const deployScript = join(root, 'scripts', 'deploy-containerapp.sh');
+const tempDirectory = mkdtempSync(join(tmpdir(), 'haptic-beat-relay-deploy-contract-'));
+const fakeBin = join(tempDirectory, 'bin');
+const commandLog = join(tempDirectory, 'commands.log');
+const npmLog = join(tempDirectory, 'npm.log');
+const revision = '0123456789abcdef0123456789abcdef01234567';
+
+try {
+  mkdirSync(fakeBin);
+  const fakeAz = join(fakeBin, 'az');
+  const fakeNpm = join(fakeBin, 'npm');
+  const fakeSleep = join(fakeBin, 'sleep');
+
+  writeFileSync(fakeAz, `#!/usr/bin/env sh
+set -eu
+printf '%s\\n' "$*" >> "$RELAY_DEPLOY_COMMAND_LOG"
+case "$*" in
+  *"containerapp show"*"activeRevisionsMode"*) printf 'Single\\n' ;;
+  *"containerapp show"*"scale.minReplicas"*) printf '1\\n' ;;
+  *"containerapp show"*"scale.maxReplicas"*) printf '1\\n' ;;
+  *"containerapp show"*"ingress.transport"*) printf 'Http\\n' ;;
+  *"revision list"*"length([?properties.active])"*) printf '1\\n' ;;
+  *"revision list"*"trafficWeight"*) printf 'sf-haptic-beat-relay--r0123456789\\n' ;;
+  *"replica list"*) printf '1\\n' ;;
+  *"revision show"*"scale.minReplicas"*) printf '1\\n' ;;
+  *"revision show"*"scale.maxReplicas"*) printf '1\\n' ;;
+esac
+`, 'utf8');
+  writeFileSync(fakeNpm, `#!/usr/bin/env sh
+set -eu
+printf '%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "$*" >> "$RELAY_DEPLOY_NPM_LOG"
+`, 'utf8');
+  writeFileSync(fakeSleep, '#!/usr/bin/env sh\nexit 0\n', 'utf8');
+  chmodSync(fakeAz, 0o755);
+  chmodSync(fakeNpm, 0o755);
+  chmodSync(fakeSleep, 0o755);
+
+  const result = spawnSync('sh', [deployScript, revision], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      RELAY_DEPLOY_COMMAND_LOG: commandLog,
+      RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_ROUNDS: '1',
+    },
+  });
+
+  assert.equal(result.status, 0, `deployment contract harness failed:\n${result.stderr}`);
+
+  const commands = readFileSync(commandLog, 'utf8').trim().split('\n');
+  const find = (fragment) => commands.findIndex((command) => command.includes(fragment));
+  const rollout = find(`containerapp update --resource-group sociobot --name sf-haptic-beat-relay --image sociobotregistry.azurecr.io/sf-haptic-beat-relay:${revision}`);
+  const ingress = find('containerapp ingress update --resource-group sociobot --name sf-haptic-beat-relay --transport http');
+  const singleRevisionMode = find('containerapp revision set-mode --resource-group sociobot --name sf-haptic-beat-relay --mode single');
+
+  assert.ok(find(`acr build --registry sociobotregistry --image sf-haptic-beat-relay:${revision} --build-arg BUILD_SHA=${revision} .`) >= 0, 'the image build must receive the exact release identity');
+  assert.ok(singleRevisionMode >= 0, 'the deployment must enforce single revision mode');
+  assert.ok(rollout > singleRevisionMode, 'the image rollout must occur after single revision mode is set');
+  assert.ok(ingress > rollout, 'HTTP ingress must be applied after the rollout because Azure can reset it to Auto');
+  assert.ok(commands[rollout].includes('--min-replicas 1 --max-replicas 1'), 'the new revision must be pinned to exactly one replica');
+
+  const firstTopologyRead = find("containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query properties.configuration.activeRevisionsMode --output tsv");
+  assert.ok(firstTopologyRead > ingress, 'the live topology must be read only after scale and ingress reconciliation');
+
+  assert.deepEqual(
+    readFileSync(npmLog, 'utf8').trim().split('\n'),
+    [
+      `${revision}|1|run test:live-topology`,
+      `|1|run test:live-relay`,
+    ],
+    'a successful deployment must run both the live topology identity check and repeated relay gate',
+  );
+
+  console.log('deployment command regression passed: singleton scale, post-rollout HTTP ingress, and live gates are enforced');
+} finally {
+  rmSync(tempDirectory, { recursive: true, force: true });
+}
