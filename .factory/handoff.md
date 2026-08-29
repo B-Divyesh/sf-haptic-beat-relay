@@ -1,6 +1,6 @@
 # Haptic Beat Relay — polish 1 handoff
 
-## Status: ready for guarded deployment
+## Status: verified and released
 
 - **Work order:** `haptic-beat-relay-polish-1`
 - **Repair base:** `1a9cd415c5d3f6db834b57cc1e68f6f58b93b4df`
@@ -36,13 +36,39 @@
 
 ## Deployment and live recheck
 
-The next step is the repository-owned guarded deployment of this exact pushed
-commit. It will run immutable topology, 30-room relay, and five-client rate
-limit checks before the final live cold-open review. This handoff is committed
-with the deployment candidate because the deployment contract requires the
-handoff to be part of the released source identity.
+The guarded deployment of
+`ffabc807c1c2488efb85f79c74d089956a32dfb4` completed through ACR. The release
+script passed its initial and final topology checks around its 60-second
+stability hold, its 30 fresh relay rounds, and its five-client rate-limit gate.
+The observed live topology was:
+
+```json
+{
+  "revision": "sf-haptic-beat-relay--rffabc807c1",
+  "activeRevisions": 1,
+  "minReplicas": 1,
+  "maxReplicas": 1,
+  "runningReplicas": 1,
+  "readyReplicas": 1,
+  "transport": "Http",
+  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:ffabc807c1c2488efb85f79c74d089956a32dfb4",
+  "buildSha": "ffabc807c1c2488efb85f79c74d089956a32dfb4"
+}
+```
+
+Cold live checks passed:
+
+- `verify-url.sh` returned HTTPS 200 with no console errors, `lang=en`, one
+  h1/main, usable title, image alt text, and button names.
+- Playwright Axe found zero serious or critical violations on `/`, `/?demo=1`,
+  `/privacy`, `/terms`, and `/404`.
+- [live demo screenshot](evidence/polish-1/live/demo-mobile.png) confirms the
+  390 × 844 first viewport includes the paired sample, returned taps, score,
+  and start control. [Live landing screenshot](evidence/polish-1/live/landing-mobile.png)
+  confirms all three plain facts are visible.
+- `RELAY_EXPECTED_SHA=ffabc807c1c2488efb85f79c74d089956a32dfb4 npm run
+  test:live-topology` passed after deployment.
 
 ## Known gaps
 
-None. The only remaining work is the required deployment evidence collection
-against the just-released immutable revision.
+None.

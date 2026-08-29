@@ -1,0 +1,27 @@
+[
+  {
+    "route": "/",
+    "seriousOrCritical": 0,
+    "violations": 0
+  },
+  {
+    "route": "/?demo=1",
+    "seriousOrCritical": 0,
+    "violations": 0
+  },
+  {
+    "route": "/privacy",
+    "seriousOrCritical": 0,
+    "violations": 0
+  },
+  {
+    "route": "/terms",
+    "seriousOrCritical": 0,
+    "violations": 0
+  },
+  {
+    "route": "/404",
+    "seriousOrCritical": 0,
+    "violations": 0
+  }
+]

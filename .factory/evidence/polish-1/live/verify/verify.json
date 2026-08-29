@@ -1,0 +1,14 @@
+{
+  "url": "https://haptic-beat-relay.sociobot.in",
+  "loadMs": 579,
+  "errors": [],
+  "a11y": {
+    "title": "Haptic Beat Relay — send tactile beat cues",
+    "lang": "en",
+    "h1": 1,
+    "main": true,
+    "imgsMissingAlt": 0,
+    "buttonsUnlabeled": 0,
+    "textLength": 1256
+  }
+}
