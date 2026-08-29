@@ -93,12 +93,14 @@ actual_transport="$(az containerapp show --resource-group sociobot --name sf-hap
 active_revisions=0
 active_revision=""
 running_replicas=0
+ready_replicas=0
 for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
   active_revisions="$(az containerapp revision list --resource-group sociobot --name sf-haptic-beat-relay --query 'length([?properties.active])' --output tsv)"
   active_revision="$(az containerapp revision list --resource-group sociobot --name sf-haptic-beat-relay --query '[?properties.active && properties.trafficWeight == `100`].name | [0]' --output tsv)"
   if [ "$active_revisions" = "1" ] && [ -n "$active_revision" ]; then
     running_replicas="$(az containerapp replica list --resource-group sociobot --name sf-haptic-beat-relay --revision "$active_revision" --query 'length([?properties.runningState == `Running`])' --output tsv)"
-    [ "$running_replicas" = "1" ] && break
+    ready_replicas="$(az containerapp replica list --resource-group sociobot --name sf-haptic-beat-relay --revision "$active_revision" --query 'length([?properties.runningState == `Running` && properties.containers[0].ready == `true`])' --output tsv)"
+    [ "$running_replicas" = "1" ] && [ "$ready_replicas" = "1" ] && break
   fi
   sleep 5
 done
@@ -106,12 +108,12 @@ done
 active_min="$(az containerapp revision show --resource-group sociobot --name sf-haptic-beat-relay --revision "$active_revision" --query 'properties.template.scale.minReplicas' --output tsv)"
 active_max="$(az containerapp revision show --resource-group sociobot --name sf-haptic-beat-relay --revision "$active_revision" --query 'properties.template.scale.maxReplicas' --output tsv)"
 
-if [ "$actual_mode" != "Single" ] || [ "$actual_min" != "1" ] || [ "$actual_max" != "1" ] || [ "$actual_transport" != "http" ] || [ "$active_revisions" != "1" ] || [ -z "$active_revision" ] || [ "$active_min" != "1" ] || [ "$active_max" != "1" ] || [ "$running_replicas" != "1" ]; then
-  echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport active_revisions=$active_revisions active_revision=${active_revision:-none} active_min=${active_min:-none} active_max=${active_max:-none} running_replicas=$running_replicas" >&2
+if [ "$actual_mode" != "Single" ] || [ "$actual_min" != "1" ] || [ "$actual_max" != "1" ] || [ "$actual_transport" != "http" ] || [ "$active_revisions" != "1" ] || [ -z "$active_revision" ] || [ "$active_min" != "1" ] || [ "$active_max" != "1" ] || [ "$running_replicas" != "1" ] || [ "$ready_replicas" != "1" ]; then
+  echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport active_revisions=$active_revisions active_revision=${active_revision:-none} active_min=${active_min:-none} active_max=${active_max:-none} running_replicas=$running_replicas ready_replicas=$ready_replicas" >&2
   exit 1
 fi
 
-echo "Relay deployment contract verified: revision=$active_revision, one active/running replica, HTTP ingress."
+echo "Relay deployment contract verified: revision=$active_revision, one active, running, and ready replica, HTTP ingress."
 
 # Azure's resource view proves the topology. The live checks then prove that
 # independently routed HTTP create/join calls and WebSocket upgrades actually

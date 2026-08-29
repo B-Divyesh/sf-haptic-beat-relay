@@ -573,11 +573,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn regression_p0_separate_process_room_state_reproduces_the_websocket_404() {
-        // This is the production failure reported in verification 5: the HTTP
-        // create reaches one process but the WebSocket upgrade reaches another
-        // process with a different in-memory room map. The deployment contract
-        // is therefore required to keep exactly one process/revision live.
+    async fn regression_p0_separate_process_room_state_reproduces_create_then_join_404() {
+        // This is the exact production failure reported in verification 17:
+        // an HTTP create reaches one process and the immediate companion join
+        // reaches another process with a different in-memory room map. The
+        // singleton deployment contract is the only supported topology while
+        // the product deliberately keeps its room state ephemeral.
         let creator_process = app("frontend/dist");
         let created = creator_process
             .clone()
@@ -592,6 +593,20 @@ mod tests {
         .unwrap();
         let code = room["code"].as_str().unwrap();
         let token = room["host_token"].as_str().unwrap();
+
+        let secondary_join = app("frontend/dist")
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/join"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            secondary_join.status(),
+            StatusCode::NOT_FOUND,
+            "a companion routed to another process sees the verification-17 room_not_found failure"
+        );
 
         let creator_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let creator_address = creator_listener.local_addr().unwrap();
@@ -734,23 +749,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn regression_p0_two_process_limiters_reproduce_the_incorrect_80_request_allowance() {
-        // This is the second half of the live failure from verification 8.
-        // Two independent replicas each own a fresh in-memory counter, so one
-        // forwarded client is incorrectly admitted 80 times when requests are
-        // load-balanced between them. Production is protected by the asserted
-        // one-replica Container App topology; keep this test so that boundary
-        // remains explicit until the state moves to shared infrastructure.
+    async fn regression_p0_three_process_limiters_admit_all_45_requests() {
+        // This is the exact verification-17 allowance failure. Three
+        // process-local replicas each own a fresh counter, so a 45-request
+        // burst from one forwarded client is incorrectly admitted in full.
+        // The guarded Container App deployment must retain one ready replica
+        // until these ephemeral buckets move to shared infrastructure.
         let first_process = app("frontend/dist");
         let second_process = app("frontend/dist");
+        let third_process = app("frontend/dist");
         let mut statuses = Vec::new();
-        let mut retry_after = Vec::new();
 
-        for request_number in 0..90 {
-            let application = if request_number % 2 == 0 {
-                first_process.clone()
-            } else {
-                second_process.clone()
+        for request_number in 0..45 {
+            let application = match request_number % 3 {
+                0 => first_process.clone(),
+                1 => second_process.clone(),
+                _ => third_process.clone(),
             };
             let response = application
                 .oneshot(
@@ -762,7 +776,6 @@ mod tests {
                 .await
                 .unwrap();
             statuses.push(response.status());
-            retry_after.push(response.headers().get(header::RETRY_AFTER).cloned());
         }
 
         assert_eq!(
@@ -770,21 +783,16 @@ mod tests {
                 .iter()
                 .filter(|&&status| status == StatusCode::OK)
                 .count(),
-            80,
-            "two process-local limiters reproduce the unsafe doubled allowance"
+            45,
+            "three process-local limiters reproduce the unsafe 45/45 allowance"
         );
         assert_eq!(
             statuses
                 .iter()
                 .filter(|&&status| status == StatusCode::TOO_MANY_REQUESTS)
                 .count(),
-            10
+            0
         );
-        assert!(retry_after
-            .iter()
-            .zip(statuses)
-            .filter(|(_, status)| *status == StatusCode::TOO_MANY_REQUESTS)
-            .all(|(value, _)| value == &Some(HeaderValue::from_static("1"))));
     }
 
     #[tokio::test]

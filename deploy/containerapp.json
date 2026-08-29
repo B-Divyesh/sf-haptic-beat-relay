@@ -10,5 +10,11 @@
   "scale": {
     "minReplicas": 1,
     "maxReplicas": 1
+  },
+  "stateTopology": {
+    "roomState": "ephemeral process-local memory",
+    "webSocketBroadcast": "ephemeral process-local memory",
+    "rateLimitBuckets": "ephemeral process-local memory",
+    "persistence": "none; rooms expire after two hours and a restart clears them"
   }
 }

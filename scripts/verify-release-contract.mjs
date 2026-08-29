@@ -32,6 +32,16 @@ assert.deepEqual(
   { transport: 'http' },
   'WebSocket upgrades require explicit HTTP ingress for the single-process relay',
 );
+assert.deepEqual(
+  deployment.stateTopology,
+  {
+    roomState: 'ephemeral process-local memory',
+    webSocketBroadcast: 'ephemeral process-local memory',
+    rateLimitBuckets: 'ephemeral process-local memory',
+    persistence: 'none; rooms expire after two hours and a restart clears them',
+  },
+  'the deployment contract must document the ephemeral state topology that requires the singleton replica',
+);
 
 const deployScript = readFileSync(new URL('./deploy-containerapp.sh', import.meta.url), 'utf8');
 assert.equal(packageJson.scripts.deploy, 'sh scripts/deploy-containerapp.sh', 'the package deployment entry point must use the guarded rollout script');
@@ -49,6 +59,7 @@ assert.match(deployScript, /active_revisions=.*revision list/, 'deployment must 
 assert.match(deployScript, /actual_max=.*maxReplicas/, 'deployment must verify the applied maximum replica count');
 assert.match(deployScript, /active_max=.*revision show/, 'deployment must verify the active revision itself has a one-replica maximum');
 assert.match(deployScript, /running_replicas=.*replica list/, 'deployment must wait for exactly one running active replica');
+assert.match(deployScript, /ready_replicas=.*properties\.containers\[0\]\.ready/, 'deployment must wait for exactly one ready active application container');
 assert.match(deployScript, /tr '\[:upper:\]' '\[:lower:\]'/, 'deployment must normalize Azure ingress transport casing before verification');
 
 const imageRollout = deployScript.indexOf('az containerapp update');

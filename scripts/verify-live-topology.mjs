@@ -55,6 +55,8 @@ assert.match(
 const replicas = azJson(['containerapp', 'replica', 'list', '--resource-group', resourceGroup, '--name', appName, '--revision', revisionName]);
 const running = replicas.filter((replica) => replica.properties.runningState === 'Running');
 assert.equal(running.length, 1, 'exactly one replica must be running');
+const ready = running.filter((replica) => replica.properties.containers?.length === 1 && replica.properties.containers[0].ready === true);
+assert.equal(ready.length, 1, 'the one running replica must report its application container ready');
 
 const healthResponse = await fetch(`${baseURL}/health`, { cache: 'no-store' });
 assert.equal(healthResponse.status, 200);
@@ -68,6 +70,7 @@ console.log(JSON.stringify({
   minReplicas: app.properties.template.scale.minReplicas,
   maxReplicas: app.properties.template.scale.maxReplicas,
   runningReplicas: running.length,
+  readyReplicas: ready.length,
   transport: app.properties.configuration.ingress.transport,
   image: containers[0].image,
   buildSha: health.build_sha,

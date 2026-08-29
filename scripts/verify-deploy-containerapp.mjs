@@ -29,6 +29,7 @@ case "$*" in
   *"containerapp show"*"ingress.transport"*) printf '%s\\n' "\${RELAY_FAKE_TRANSPORT:-Http}" ;;
   *"revision list"*"length([?properties.active])"*) printf '1\\n' ;;
   *"revision list"*"trafficWeight"*) printf 'sf-haptic-beat-relay--r0123456789\\n' ;;
+  *"ready"*) printf '%s\\n' "\${RELAY_FAKE_READY_REPLICAS:-1}" ;;
   *"replica list"*) printf '%s\\n' "\${RELAY_FAKE_RUNNING_REPLICAS:-1}" ;;
   *"revision show"*"scale.minReplicas"*) printf '1\\n' ;;
   *"revision show"*"scale.maxReplicas"*) printf '%s\\n' "\${RELAY_FAKE_MAX_REPLICAS:-1}" ;;
@@ -85,6 +86,10 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
     commands[rollout].includes('--revision-suffix r0123456789'),
     'the new revision must carry the guarded SHA-derived suffix, not the generic deployment suffix',
   );
+  assert.ok(
+    commands.some((command) => command.includes("properties.containers[0].ready == `true`")),
+    'the deployment must wait for exactly one running application container to become ready',
+  );
 
   const firstTopologyRead = find("containerapp show --resource-group sociobot --name sf-haptic-beat-relay --query properties.configuration.activeRevisionsMode --output tsv");
   assert.ok(firstTopologyRead > ingress, 'the live topology must be read only after scale and ingress reconciliation');
@@ -99,7 +104,7 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
     'a successful deployment must run the topology identity, repeated relay, and five-fresh-client rate-limit gates',
   );
 
-  // Reproduce verification 14's exact release blocker in the deployment
+  // Reproduce verification 17's exact release blocker in the deployment
   // harness: the controller rollout restored Auto ingress and a 1-3 replica
   // range, then three processes split room and rate-limit state. The
   // source-owned path must stop before any live success gate can run.
@@ -116,19 +121,35 @@ printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELA
       RELAY_FAKE_TRANSPORT: 'Auto',
       RELAY_FAKE_MAX_REPLICAS: '3',
       RELAY_FAKE_RUNNING_REPLICAS: '3',
+      RELAY_FAKE_READY_REPLICAS: '3',
     },
   });
   assert.equal(drift.status, 1, 'the verifier topology must block deployment');
   assert.match(
     drift.stderr,
-    /min=1 max=3 transport=auto[\s\S]*active_min=1 active_max=3 running_replicas=3/,
-    'the rejected deployment must report the exact ingress, scale, active-revision, and replica drift',
+    /min=1 max=3 transport=auto[\s\S]*active_min=1 active_max=3 running_replicas=3 ready_replicas=3/,
+    'the rejected deployment must report the exact ingress, scale, active-revision, running, and ready replica drift',
   );
   assert.equal(
     readFileSync(npmLog, 'utf8'),
     npmBeforeDrift,
     'a drifted topology must not run relay or allowance success gates',
   );
+
+  const notReady = spawnSync('sh', [deployScript, revision], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      RELAY_DEPLOY_COMMAND_LOG: commandLog,
+      RELAY_DEPLOY_NPM_LOG: npmLog,
+      RELAY_DEPLOY_EXPECTED_REVISION: revision,
+      RELAY_FAKE_READY_REPLICAS: '0',
+    },
+  });
+  assert.equal(notReady.status, 1, 'a running but unready application container must block deployment');
+  assert.match(notReady.stderr, /running_replicas=1 ready_replicas=0/, 'the readiness failure must be actionable');
 
   // Reproduce verification 15's release-sequencing root cause: the guarded
   // implementation was deployed before the handoff commit that became the
