@@ -35,7 +35,7 @@ esac
 `, 'utf8');
   writeFileSync(fakeNpm, `#!/usr/bin/env sh
 set -eu
-printf '%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "$*" >> "$RELAY_DEPLOY_NPM_LOG"
+printf '%s|%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "\${RELAY_RATE_REPETITIONS:-}" "$*" >> "$RELAY_DEPLOY_NPM_LOG"
 `, 'utf8');
   writeFileSync(fakeSleep, '#!/usr/bin/env sh\nexit 0\n', 'utf8');
   chmodSync(fakeAz, 0o755);
@@ -74,13 +74,14 @@ printf '%s|%s|%s\\n' "\${RELAY_EXPECTED_SHA:-}" "\${RELAY_ROUNDS:-}" "$*" >> "$R
   assert.deepEqual(
     readFileSync(npmLog, 'utf8').trim().split('\n'),
     [
-      `${revision}|1|run test:live-topology`,
-      `|1|run test:live-relay`,
+      `${revision}|1||run test:live-topology`,
+      `|1||run test:live-relay`,
+      `|1|5|run test:live-rate-limit`,
     ],
-    'a successful deployment must run both the live topology identity check and repeated relay gate',
+    'a successful deployment must run the topology identity, repeated relay, and five-fresh-client rate-limit gates',
   );
 
-  console.log('deployment command regression passed: singleton scale, post-rollout HTTP ingress, and live gates are enforced');
+console.log('deployment command regression passed: singleton scale, post-rollout HTTP ingress, and all live gates are enforced');
 } finally {
   rmSync(tempDirectory, { recursive: true, force: true });
 }

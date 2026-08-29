@@ -61,5 +61,10 @@ assert.match(
   /RELAY_ROUNDS="\$\{RELAY_ROUNDS:-30\}" npm run test:live-relay/,
   'deployment must run repeated fresh-room HTTP and WebSocket checks after rollout',
 );
+assert.match(
+  deployScript,
+  /RELAY_RATE_REPETITIONS="\$\{RELAY_RATE_REPETITIONS:-5\}" npm run test:live-rate-limit/,
+  'deployment must run five fresh-client rate-limit bursts after rollout',
+);
 
-console.log('deployment contract ok: one active revision, min/max replicas 1, HTTP ingress reapplied after rollout and live-checked');
+console.log('deployment contract ok: one active revision, min/max replicas 1, HTTP ingress, relay, and repeated rate limits live-checked');

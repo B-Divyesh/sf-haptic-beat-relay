@@ -62,7 +62,12 @@ The topology check uses read-only Azure queries. It verifies one active
 revision, one configured and running replica, HTTP ingress, and a live build
 SHA matching the checked-out commit. The live rate-limit check sends one fresh
 45-request room burst and requires exactly 40 successes followed by five
-`429` responses with `Retry-After: 1`.
+`429` responses with `Retry-After: 1`. The release claim runs five such bursts
+under distinct forwarded client identities:
+
+```sh
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+```
 
 ## How it works
 
@@ -87,7 +92,15 @@ The multi-stage image runs as a non-root user. `/health` reports the build SHA. 
 
 ## Deploy
 
-The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container serves the built frontend and relay backend together on `PORT`. [`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth runtime contract: one active revision, exactly one replica, and HTTP ingress for WebSocket upgrades. Deploy a revision with `npm run deploy -- <full-git-sha>`; it builds in ACR, forces single-revision mode, applies the scale and transport settings, and fails unless the active revision itself has one ready replica and the live topology and relay checks pass.
+The factory builds the root `Dockerfile` and supplies `BUILD_SHA`. The container
+serves the built frontend and relay backend together on `PORT`.
+[`deploy/containerapp.json`](deploy/containerapp.json) is the source-of-truth
+runtime contract: one active revision, exactly one replica, and HTTP ingress
+for WebSocket upgrades. Deploy a revision with
+`npm run deploy -- <full-git-sha>`; it builds in ACR, forces single-revision
+mode, applies the scale and transport settings, and fails unless the active
+revision itself has one ready replica and the live topology, relay, and
+five-client rate-limit checks pass.
 
 ## Project records
 

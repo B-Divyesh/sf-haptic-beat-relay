@@ -80,3 +80,4 @@ echo "Relay deployment contract verified: revision=$active_revision, one active/
 # share that one process before this deployment is accepted.
 RELAY_EXPECTED_SHA="$revision" npm run test:live-topology
 RELAY_ROUNDS="${RELAY_ROUNDS:-30}" npm run test:live-relay
+RELAY_RATE_REPETITIONS="${RELAY_RATE_REPETITIONS:-5}" npm run test:live-rate-limit
