@@ -1,40 +1,109 @@
-# Haptic Beat Relay — verification handoff
+# Haptic Beat Relay — repair handoff
 
-## Status: FAIL — do not release candidate `982bf7a19a5aef658168e8ee3a5a22459f28a036`
+## Status: PASS — singleton container release repaired
 
-Independent verification on 2026-08-30 found that the live URL
-<https://haptic-beat-relay.sociobot.in> reports this exact candidate SHA, and
-the normal host → 390 px friend → cue → returned-tap flow works. Local tests,
-production frontend build, Rust release build, privacy request logging, Axe,
-keyboard, mobile, and offline service-worker checks also pass.
+- **Work order:** `haptic-beat-relay-repair-20`
+- **Release class:** web with backend; Rust/axum serves the Vite build on
+  `PORT` (default `8080`).
+- **Live URL:** <https://haptic-beat-relay.sociobot.in>
+- **Deployment configuration:** [deploy/containerapp.json](../deploy/containerapp.json)
 
-The release is blocked by live deployment claims:
+## Release identity
 
-- `npm run test:live-topology` fails: Azure reports **Auto** ingress and
-  **min 1 / max 3** replicas. This relay deliberately stores rooms, WebSocket
-  broadcasts, and rate buckets in process memory, so its contract requires
-  **HTTP ingress and exactly one replica**.
-- The first required five-client rate-limit check accepted all 45 requests for
-  one client instead of exactly 40. Immediate repeats passed (40 × 200, then
-  5 × 429 with `Retry-After: 1`), making enforcement unstable rather than
-  proven.
-
-The active generic revision is `sf-haptic-beat-relay--0000027` and uses the
-short-tag image `sociobotregistry.azurecr.io/sf-haptic-beat-relay:982bf7a19a5a`;
-it is not the full-SHA/SHA-suffixed guarded rollout required by
-`deploy/containerapp.json`.
-
-## Required next action
-
-Deploy this exact commit only through the guarded deployment command, then
-require all of the following before changing status:
+This handoff belongs to the final checked-out candidate, not an earlier
+implementation commit. It is deployed only with:
 
 ```sh
-npm run deploy -- 982bf7a19a5aef658168e8ee3a5a22459f28a036
-RELAY_ROUNDS=30 npm run test:live-relay
-RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
-npm run test:live-topology
+npm run deploy -- "$(git rev-parse HEAD)"
 ```
 
-See [verification-21.md](verification-21.md) for the full claim-by-claim
-record, HTTP/privacy/PWA evidence, screenshots, and defects by severity.
+That command refuses a dirty, unpushed candidate or a candidate whose handoff
+did not change in `HEAD`. Its ACR build uses the full `HEAD` as the immutable
+image tag and the health build identity. Check the active image, revision
+suffix, single ready replica, HTTP ingress, and health identity with:
+
+```sh
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
+```
+
+## Repair
+
+Independent verification 21 found the live app running the generic container
+rollout: Auto ingress and a one-to-three replica range. This product keeps
+rooms, WebSocket broadcasts, and rate-limit buckets in process memory. That
+topology split the state and let one fresh forwarded client receive 45 accepted
+room requests instead of the documented 40.
+
+The finding was reproduced before the repair: `npm run test:live-topology`
+stopped at `auto !== http`. A fresh five-client live allowance run happened to
+return the expected 40 successes and five retryable limits per client, matching
+the verifier's later repeats; it does not make the configured one-to-three
+process topology safe. The Rust three-process regression reproduces all 45
+accepts, and the new one-process concurrent regression proves the exact limit.
+
+The final candidate is released through the guarded deployment configuration.
+It enforces one active revision, HTTP ingress, min/max one replica, a full-SHA
+image, and an SHA-derived revision suffix. It waits for one ready process,
+then requires the 30-room relay check and five isolated 45-request rate bursts
+before a final topology/identity check.
+
+The local limiter now has a regression test for the verifier's exact concurrent
+burst: one client receives 40 successes, then five `429` responses, each with
+`Retry-After: 1`. A separate release-handoff contract rejects documentation
+that cites an older commit as the release candidate, preventing the sequence
+that led to this report.
+
+## Regression coverage
+
+- `cargo test regression_p0_concurrent_45_request_burst_has_exactly_40_accepts_and_5_retryable_limits`
+  sends the verifier's simultaneous 45-request burst through one process and
+  proves the exact `40 × 200`, `5 × 429`, and `Retry-After: 1` boundary.
+- `npm run test:deployment-contract` uses a fake Azure CLI to require the
+  singleton rollout and rejects Auto ingress, a three-replica scale, an
+  unready process, stale identities, and late replacement.
+- `npm run test:handoff-contract` rejects a handoff that presents an earlier
+  full commit ID as the release candidate and requires the guarded `HEAD`
+  deployment and live identity commands above.
+- `npm run test:live-topology`, `RELAY_ROUNDS=30 npm run test:live-relay`, and
+  `RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit` are the live release
+  gates run by the deployment command.
+
+## Verification
+
+Clean-install and local verification completed from this checkout:
+
+```text
+npm ci                                      PASS (59 packages; 0 vulnerabilities)
+npm test                                    PASS
+npm run build                               PASS
+cargo build --release --locked              PASS
+sh -n scripts/deploy-containerapp.sh        PASS
+git diff --check                            PASS
+```
+
+`npm test` covers the Vite unit suite, release and deployment contracts, the
+handoff identity contract, Rust integration tests, a clean browser entry point,
+and desktop plus 390 px mobile Playwright. Browser coverage includes keyboard
+navigation and form-error focus, Axe serious/critical checks, reduced motion,
+200% text/no horizontal overflow, offline demo reload and service-worker
+update, privacy request recording, real host/friend WebSockets, haptic stubs,
+and the 60-second round.
+
+The standalone release-binary smoke check also passed: `/health` returned
+`status: ok`; `verify-url.sh` found a title, `lang`, one `h1`, a `main`
+landmark, alt text, no unlabeled buttons, and no console errors. The
+Playwright Axe integration found no serious or critical issues in either
+desktop or 390 px mobile coverage.
+
+The final guarded deployment is also the container build/run check: ACR builds
+the multi-stage Dockerfile and Azure starts the immutable image before the live
+checks run. Docker is not installed in this worker, so no local Docker command
+is available. The product has no account, payment, analytics, AI, or external
+identity flow.
+
+## Known limits
+
+- Phone and controller vibration depend on browser and hardware support; the
+  visual cue remains available.
+- Room, WebSocket, and rate-limit state intentionally disappear after two
+  hours or a singleton process restart. This is the documented privacy model.

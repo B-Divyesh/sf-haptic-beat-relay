@@ -11,12 +11,13 @@
     "test:unit": "vitest run --config frontend/vitest.config.ts",
     "test:release-contract": "node scripts/verify-release-contract.mjs",
     "test:deployment-contract": "node scripts/verify-deploy-containerapp.mjs",
+    "test:handoff-contract": "node scripts/verify-handoff-release.mjs",
     "test:browser": "npm run build && playwright test",
     "test:clean-entrypoint": "node scripts/verify-clean-browser-entrypoint.mjs",
     "test:live-relay": "node scripts/verify-live-relay.mjs",
     "test:live-rate-limit": "node scripts/verify-live-rate-limit.mjs",
     "test:live-topology": "node scripts/verify-live-topology.mjs",
-    "test": "npm run test:unit && npm run test:release-contract && npm run test:deployment-contract && cargo test && npm run test:clean-entrypoint && playwright test"
+    "test": "npm run test:unit && npm run test:release-contract && npm run test:deployment-contract && npm run test:handoff-contract && cargo test && npm run test:clean-entrypoint && playwright test"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",

@@ -749,6 +749,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn regression_p0_concurrent_45_request_burst_has_exactly_40_accepts_and_5_retryable_limits()
+    {
+        // Verification 21 sends its 45 requests at once. Exercise that same
+        // shape in one process so the mutex-backed bucket cannot accidentally
+        // admit an extra request when many handlers arrive together. A live
+        // multi-process deployment is separately rejected by the singleton
+        // topology claim below and by the deploy contract.
+        let application = app("frontend/dist");
+        let responses = futures_util::future::join_all((0..45).map(|_| {
+            application.clone().oneshot(
+                Request::post("/api/rooms")
+                    .header("x-forwarded-for", "198.51.100.106")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        }))
+        .await;
+
+        let responses: Vec<Response> = responses
+            .into_iter()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(
+            responses
+                .iter()
+                .filter(|response| response.status() == StatusCode::OK)
+                .count(),
+            40,
+            "the exact verifier burst must admit the documented 40 requests"
+        );
+        let limited: Vec<&Response> = responses
+            .iter()
+            .filter(|response| response.status() == StatusCode::TOO_MANY_REQUESTS)
+            .collect();
+        assert_eq!(
+            limited.len(),
+            5,
+            "the remaining five simultaneous requests must be limited"
+        );
+        assert!(limited.iter().all(|response| {
+            response.headers().get(header::RETRY_AFTER)
+                == Some(&HeaderValue::from_static("1"))
+        }));
+    }
+
+    #[tokio::test]
     async fn regression_p0_three_process_limiters_admit_all_45_requests() {
         // This is the exact verification-17 allowance failure. Three
         // process-local replicas each own a fresh counter, so a 45-request
