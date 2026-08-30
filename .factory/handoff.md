@@ -72,6 +72,9 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
 - Live durability: `npm run test:live-persistence` created a room, restarted
   the active revision onto a different replica, and joined the same room from
   the persisted database.
+- The 30-round browser probe waits for the asynchronous room create to replace
+  its six-dot loading placeholder before reading the code; this covers the
+  real Azure Files latency observed during release.
 - Formatting and lint: `cargo fmt --check` and
   `cargo clippy --all-targets --all-features -- -D warnings` passed.
 - Production builds: `npm run build` and `cargo build --release --locked`

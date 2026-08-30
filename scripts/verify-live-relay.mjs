@@ -63,6 +63,11 @@ try {
 
     try {
       await host.goto(`${baseURL}/host`, { waitUntil: 'domcontentloaded' });
+      await host.waitForFunction(
+        () => /^[A-Z0-9]{6}$/.test(document.querySelector('#room-code')?.textContent?.trim() ?? ''),
+        undefined,
+        { timeout: 10_000 },
+      );
       const code = (await host.locator('#room-code').textContent())?.trim();
       assert.match(code ?? '', /^[A-Z0-9]{6}$/, `round ${attempt}: host did not create a room`);
 

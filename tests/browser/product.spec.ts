@@ -324,6 +324,7 @@ test('regression: 30 fresh desktop-host and 390px companion rounds remain connec
     const companion = await companionContext.newPage();
 
     await host.goto('/host');
+    await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/, { timeout: 10_000 });
     const code = await host.locator('#room-code').textContent();
     expect(code, `room ${attempt} has a code`).toMatch(/^[A-Z0-9]{6}$/);
     await companion.goto(`/join/${code}`);
