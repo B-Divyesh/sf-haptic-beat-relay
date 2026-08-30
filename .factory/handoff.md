@@ -95,6 +95,24 @@ landmark, alt text, no unlabeled buttons, and no console errors. The
 Playwright Axe integration found no serious or critical issues in either
 desktop or 390 px mobile coverage.
 
+## Final live evidence
+
+The guarded release command completed for this handoff's `HEAD`. ACR built the
+multi-stage image from the clean source archive, then Azure reported one active
+revision with 100% traffic, one running and ready replica, HTTP ingress, and a
+full-`HEAD` image tag with an SHA-derived revision suffix. The final `/health`
+response returned the same `HEAD` build identity.
+
+- The first and final `test:live-topology` checks both passed.
+- `RELAY_ROUNDS=30 npm run test:live-relay` passed 30 fresh API create/join
+  pairs and 30 fresh desktop-host/390 px companion WebSocket rounds, each with
+  a returned tap and shared score.
+- `RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit` passed five isolated
+  clients: each observed exactly 40 `200` responses followed by five `429`
+  responses carrying `Retry-After: 1`.
+- The deployment command held the revision for its 60-second stability window
+  and the final identity/topology check still passed.
+
 The final guarded deployment is also the container build/run check: ACR builds
 the multi-stage Dockerfile and Azure starts the immutable image before the live
 checks run. Docker is not installed in this worker, so no local Docker command
