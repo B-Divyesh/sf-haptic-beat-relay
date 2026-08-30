@@ -36,8 +36,9 @@ const createdResponse = await fetch(`${baseURL}/api/rooms`, {
   cache: 'no-store',
   headers: { 'X-Forwarded-For': client },
 });
-assert.equal(createdResponse.status, 200, `durability setup failed: ${await createdResponse.text()}`);
-const room = await createdResponse.json();
+const createdBody = await createdResponse.text();
+assert.equal(createdResponse.status, 200, `durability setup failed: ${createdBody}`);
+const room = JSON.parse(createdBody);
 assert.match(room.code, /^[A-Z0-9]{6}$/);
 
 const revision = activeRevision();

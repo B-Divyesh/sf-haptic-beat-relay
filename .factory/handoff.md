@@ -69,6 +69,9 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
 - The Azure Files regression holds an exclusive rollback-journal lock, proves
   incoming startup waits for its release, asserts `journal_mode=delete`, and
   exercises the release SQLite build through the `unix-none` VFS.
+- Live durability: `npm run test:live-persistence` created a room, restarted
+  the active revision onto a different replica, and joined the same room from
+  the persisted database.
 - Formatting and lint: `cargo fmt --check` and
   `cargo clippy --all-targets --all-features -- -D warnings` passed.
 - Production builds: `npm run build` and `cargo build --release --locked`
