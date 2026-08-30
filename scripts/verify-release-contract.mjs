@@ -45,6 +45,12 @@ assert.deepEqual(
 
 const deployScript = readFileSync(new URL('./deploy-containerapp.sh', import.meta.url), 'utf8');
 assert.equal(packageJson.scripts.deploy, 'sh scripts/deploy-containerapp.sh', 'the package deployment entry point must use the guarded rollout script');
+assert.match(deployScript, /config_file="deploy\/containerapp\.json"/, 'the guarded release must consume the checked-in deployment configuration');
+assert.match(deployScript, /config\.activeRevisionsMode/, 'the release configuration must supply the active revision mode');
+assert.match(deployScript, /config\.ingress && config\.ingress\.transport/, 'the release configuration must supply ingress transport');
+assert.match(deployScript, /config\.scale && config\.scale\.minReplicas/, 'the release configuration must supply the replica floor');
+assert.match(deployScript, /config\.scale && config\.scale\.maxReplicas/, 'the release configuration must supply the replica ceiling');
+assert.doesNotMatch(deployScript, /--name sf-haptic-beat-relay/, 'the guarded release must not drift from its checked-in app configuration');
 assert.match(deployScript, /checked_out_revision=.*git rev-parse --verify HEAD/, 'deployment must resolve the checked-out source identity');
 assert.match(deployScript, /\[ "\$revision" != "\$checked_out_revision" \]/, 'deployment must reject a caller-supplied identity that is not HEAD');
 assert.match(deployScript, /git status --porcelain --untracked-files=all/, 'deployment must reject a dirty release tree');
@@ -52,9 +58,9 @@ assert.match(deployScript, /git rev-parse --verify '@\{upstream\}'/, 'deployment
 assert.match(deployScript, /\[ "\$upstream_revision" != "\$checked_out_revision" \]/, 'deployment must reject an unpushed release');
 assert.match(deployScript, /git log -1 --format=%H -- \.factory\/handoff\.md/, 'deployment must require the final handoff in the released commit');
 assert.match(deployScript, /\[ "\$handoff_revision" != "\$checked_out_revision" \]/, 'deployment must reject a candidate whose handoff predates HEAD');
-assert.match(deployScript, /--min-replicas 1\s+\\?\n\s*--max-replicas 1/, 'deployment must apply the one-replica scale contract');
+assert.match(deployScript, /--min-replicas "\$min_replicas"\s+\\?\n\s*--max-replicas "\$max_replicas"/, 'deployment must apply the configured one-replica scale contract');
 assert.match(deployScript, /containerapp revision set-mode[\s\S]*--mode single/, 'deployment must force single active-revision mode before each release');
-assert.match(deployScript, /az containerapp ingress update[\s\S]*--transport http/, 'deployment must pin HTTP ingress for WebSocket upgrades');
+assert.match(deployScript, /az containerapp ingress update[\s\S]*--transport "\$ingress_transport"/, 'deployment must pin configured HTTP ingress for WebSocket upgrades');
 assert.match(deployScript, /active_revisions=.*revision list/, 'deployment must verify there is exactly one active revision');
 assert.match(deployScript, /actual_max=.*maxReplicas/, 'deployment must verify the applied maximum replica count');
 assert.match(deployScript, /active_max=.*revision show/, 'deployment must verify the active revision itself has a one-replica maximum');
@@ -67,8 +73,8 @@ const ingressAfterRollout = deployScript.indexOf('az containerapp ingress update
 assert.ok(imageRollout >= 0, 'deployment must roll out the image');
 assert.match(
   deployScript,
-  /--image "sociobotregistry\.azurecr\.io\/sf-haptic-beat-relay:\$revision"[\s\S]*--revision-suffix "r\$short_revision"/,
-  'the guarded rollout must use the full immutable SHA tag and an SHA-derived revision suffix',
+  /--image "\$registry\.azurecr\.io\/\$image_repository:\$revision"[\s\S]*--revision-suffix "r\$short_revision"/,
+  'the guarded rollout must use the configured full immutable SHA tag and an SHA-derived revision suffix',
 );
 assert.ok(
   ingressAfterRollout > imageRollout,
@@ -103,8 +109,8 @@ assert.equal(
 const topologyChecker = readFileSync(new URL('./verify-live-topology.mjs', import.meta.url), 'utf8');
 assert.match(
   topologyChecker,
-  /expectedImage = `sociobotregistry\.azurecr\.io\/sf-haptic-beat-relay:\$\{expectedSha\}`/,
-  'the singleton live claim must reject a generic image rollout even when its health SHA matches',
+  /expectedImage = `\$\{deployment\.registry\}\.azurecr\.io\/\$\{deployment\.imageRepository\}:\$\{expectedSha\}`/,
+  'the singleton live claim must reject a generic configured-image rollout even when its health SHA matches',
 );
 assert.match(
   topologyChecker,

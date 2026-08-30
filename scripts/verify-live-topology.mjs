@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 // @claim:singleton-deployment
 
-const resourceGroup = process.env.RELAY_RESOURCE_GROUP ?? 'sociobot';
-const appName = process.env.RELAY_CONTAINER_APP ?? 'sf-haptic-beat-relay';
+const deployment = JSON.parse(readFileSync(new URL('../deploy/containerapp.json', import.meta.url), 'utf8'));
+const resourceGroup = process.env.RELAY_RESOURCE_GROUP ?? deployment.resourceGroup;
+const appName = process.env.RELAY_CONTAINER_APP ?? deployment.containerApp;
 const baseURL = (process.env.RELAY_BASE_URL ?? 'https://haptic-beat-relay.sociobot.in').replace(/\/$/, '');
 const expectedSha = process.env.RELAY_EXPECTED_SHA
   ?? execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -18,21 +20,21 @@ function azJson(args) {
 }
 
 const app = azJson(['containerapp', 'show', '--resource-group', resourceGroup, '--name', appName]);
-assert.equal(app.properties.configuration.activeRevisionsMode.toLowerCase(), 'single');
-assert.equal(app.properties.configuration.ingress.transport.toLowerCase(), 'http');
-assert.equal(app.properties.template.scale.minReplicas, 1);
-assert.equal(app.properties.template.scale.maxReplicas, 1);
+assert.equal(app.properties.configuration.activeRevisionsMode, deployment.activeRevisionsMode);
+assert.equal(app.properties.configuration.ingress.transport.toLowerCase(), deployment.ingress.transport);
+assert.equal(app.properties.template.scale.minReplicas, deployment.scale.minReplicas);
+assert.equal(app.properties.template.scale.maxReplicas, deployment.scale.maxReplicas);
 
 const revisions = azJson(['containerapp', 'revision', 'list', '--resource-group', resourceGroup, '--name', appName]);
 const active = revisions.filter((revision) => revision.properties.active);
 assert.equal(active.length, 1, 'exactly one revision must be active');
 assert.equal(active[0].properties.trafficWeight, 100, 'the active revision must receive all traffic');
-assert.equal(active[0].properties.template.scale.minReplicas, 1);
-assert.equal(active[0].properties.template.scale.maxReplicas, 1);
+assert.equal(active[0].properties.template.scale.minReplicas, deployment.scale.minReplicas);
+assert.equal(active[0].properties.template.scale.maxReplicas, deployment.scale.maxReplicas);
 
 const revisionName = active[0].name;
 const containers = active[0].properties.template.containers;
-const expectedImage = `sociobotregistry.azurecr.io/sf-haptic-beat-relay:${expectedSha}`;
+const expectedImage = `${deployment.registry}.azurecr.io/${deployment.imageRepository}:${expectedSha}`;
 
 // A matching /health response alone is not enough. The previous failed
 // release was rebuilt by the factory's generic container path: it baked the

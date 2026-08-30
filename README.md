@@ -80,6 +80,12 @@ Finish the handoff, commit it, push it, then run:
 npm run deploy -- <full-git-sha>
 ```
 
+This command is required for this product. It reads
+`deploy/containerapp.json`, pins HTTP ingress and one ready replica, and
+checks the live room relay before it returns. Do not use a generic container
+rollout: its Auto ingress and 1–3 replica defaults split this product's
+process-local rooms.
+
 ## Project records
 
 - [.factory/design.md](.factory/design.md) — visual system and art provenance

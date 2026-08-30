@@ -1,52 +1,85 @@
-# Haptic Beat Relay — independent verification handoff
+# Haptic Beat Relay — repair handoff
 
-## Status: FAIL — release blocked
+## Status: ready for the guarded container release
 
-- **Work order:** `haptic-beat-relay-verify-20`
-- **Candidate/source commit:** `cc3cfc785f371a2e17672d5b00833e13d4b10226`
+- **Work order:** `haptic-beat-relay-repair-19`
+- **Release class:** web with backend; Rust/axum serves the Vite build on
+  `PORT` (default `8080`).
 - **Live URL:** <https://haptic-beat-relay.sociobot.in>
-- **Verified:** 2026-08-30 UTC
-- **Verifier change only:** this handoff and [verification-20.md](verification-20.md); no product code was changed.
+- **Deployment configuration:** [deploy/containerapp.json](../deploy/containerapp.json)
 
-The live `/health` response identifies the candidate SHA, so this is not a stale deployment. It is nevertheless a failed release: the claimed 30-round live relay check times out while a fresh companion waits to connect. Azure shows three ready replicas (`maxReplicas: 3`, ingress `Auto`) even though room, WebSocket broadcast, and limiter state are process-local. A host and a companion can consequently be routed to different processes.
+## Repair
 
-## Release blockers
+Independent verification 20 found the live app running the factory's generic
+container settings: Auto ingress and one to three replicas. The relay keeps
+rooms, WebSocket broadcasts, and rate-limit buckets in deliberately ephemeral
+process memory, so a host and friend could reach different processes.
 
-### P0 — live paired relay is not reliable
+The guarded deploy path now reads the committed deployment configuration rather
+than duplicating its values. It refuses any configuration other than Single
+revision mode, HTTP ingress, and exactly one replica. It builds an immutable
+full-SHA image, applies a SHA-derived revision suffix, waits for one running
+and ready replica, then proves the live identity, topology, 30 fresh
+create/join/WebSocket/tap/score pairs, and five independent rate-limit bursts.
+It repeats the topology/identity check after a reconciliation window.
 
-`RELAY_ROUNDS=30 npm run test:live-relay` failed on 2026-08-30 with `page.waitForFunction: Timeout 10000ms exceeded` at `scripts/verify-live-relay.mjs:72`, while waiting for the companion to report `Connected to room <code>`. This is the core job-to-be-done (host creates a room; friend joins, receives a cue, taps back, and sees the shared score), so a release cannot proceed.
+This is the required release command; do not use a generic container rollout:
 
-### P0 — singleton deployment claim is false
-
-`npm run test:live-topology` failed immediately: expected ingress transport `http`, observed `auto`. Fresh read-only Azure evidence:
-
-```json
-{
-  "activeRevisionsMode": "Single",
-  "transport": "Auto",
-  "minReplicas": 1,
-  "maxReplicas": 3,
-  "activeRevision": "sf-haptic-beat-relay--0000026",
-  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:cc3cfc785f37",
-  "runningReadyReplicas": 3
-}
+```sh
+npm run deploy -- "$(git rev-parse HEAD)"
 ```
 
-The documented/source deployment contract requires HTTP ingress, min/max one, an immutable full-SHA image, and an `r<sha>` revision suffix. The active revision instead has a generic suffix and shortened image tag. This contradicts the `singleton-deployment` public claim and directly causes the P0 relay failure.
+## Regression coverage
 
-## What passed
+- `scripts/verify-release-contract.mjs` proves the deploy command consumes
+  `deploy/containerapp.json`, cannot drift to a hard-coded app target, requires
+  the immutable image/revision provenance, and has two live topology gates.
+- `scripts/verify-deploy-containerapp.mjs` runs the deploy script against a
+  fake Azure CLI. It covers configuration-driven singleton rollout, Auto/three
+  replica rejection, an unready replica, stale/unpushed/dirty candidates, and
+  a late generic replacement after the functional gates.
+- `scripts/verify-live-topology.mjs` reads the same deployment configuration
+  and rejects Auto ingress, non-single scale, a non-SHA image, a generic
+  revision suffix, additional active revisions, or anything other than one
+  ready replica.
+- `scripts/verify-live-relay.mjs` is the verifier's exact P0 check: 30 fresh
+  API create→join pairs and 30 fresh desktop-host/390 px companion WebSocket
+  rounds with a returned tap and shared score.
 
-- `npm ci` completed from this checkout (59 packages; audit reported 0 vulnerabilities).
-- All local source checks passed: `npm test` (3 Vitest, 10 Rust, release/deployment contract, clean-entry, 38 Playwright tests with expected skips), `npm run build`, `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, and `cargo build --release`.
-- Every local/demo claim command passed. The two deployment claims above did not: `live-relay` and `singleton-deployment`.
-- First-read passed: the cold page says it sends beats to a friend, names friends and rhythm-game makers, and offers **Try it with sample data** with an explanation of what opens.
-- Live desktop and 390 px mobile had no page/console errors or horizontal overflow; Axe reported no serious/critical findings for the demo flow. The demo request log contained only same-origin document, JS, CSS, and favicon requests; no API or third-party request occurred.
-- A service worker controlled the page after reload; demo reload worked offline; `registration.update()` completed without a waiting worker or console error.
-- The live rate limit is enforced: five client identities each received exactly 40 successful room requests, then 5 `429` responses with `Retry-After: 1`.
-- `/health` returned `{"build_sha":"cc3cfc785f371a2e17672d5b00833e13d4b10226","status":"ok"}`. Invalid join code returned actionable 400; an unopened six-character code returned actionable 404.
+## Verification
 
-## Operational note
+Clean-install baseline in this worker:
 
-The source contains a guarded deployment script that would require the needed singleton topology, but the deployed revision plainly was not produced by that guarded outcome (or was later replaced). Re-run the guarded deploy for the final committed release and then rerun `npm run test:live-topology` and `RELAY_ROUNDS=30 npm run test:live-relay`; do not mark a release passed until both are green.
+```text
+npm ci                                      PASS (59 packages, 0 vulnerabilities)
+npm test                                    PASS
+  3 Vitest, release/deployment contracts, 10 Rust tests,
+  clean browser entrypoint, and 38 Playwright tests
+```
 
-Docker is not installed in this verifier container, so an image build/run could not be executed here. The Dockerfile and source release binary build were checked; deployment state was independently inspected through Azure.
+The repair-specific checks also pass:
+
+```text
+sh -n scripts/deploy-containerapp.sh        PASS
+node scripts/verify-release-contract.mjs    PASS
+node scripts/verify-deploy-containerapp.mjs PASS
+git diff --check                            PASS
+```
+
+The final release command above is deliberately also the container execution
+gate: ACR builds the Dockerfile and Azure starts the immutable image before
+the live topology, relay, and rate-limit checks run. Docker/Podman is not
+installed in this worker, so a local `docker run` cannot be performed here.
+
+Browser coverage includes desktop Chromium and a 390 px mobile viewport,
+keyboard navigation, 200% text, no-overflow checks, offline demo reload,
+privacy request logging, service-worker update, and Axe serious/critical
+scans. The product has no account flow, payment flow, or external identity
+integration.
+
+## Known limits
+
+- Phone and controller vibration depend on browser and hardware support; the
+  visual cue remains available.
+- Rooms and rate-limit state intentionally disappear when the singleton
+  process restarts or after two hours. That is the documented privacy model.
