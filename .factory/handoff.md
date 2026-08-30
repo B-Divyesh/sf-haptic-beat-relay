@@ -1,69 +1,100 @@
-# Haptic Beat Relay — verification 22 handoff
+# Haptic Beat Relay — repair 21 handoff
 
-## Status: FAIL — live singleton contract is not deployed
+## Status
 
-- **Work order:** `haptic-beat-relay-verify-22`
-- **Tested source:** `891be09025e0` (full identity is in verification 22)
-- **Live URL:** <https://haptic-beat-relay.sociobot.in>
-- **Full evidence:** [verification-22.md](verification-22.md)
+Release-blocking verifier findings are repaired in source and covered by exact
+regressions. The guarded release command below deploys only
+`sf-haptic-beat-relay` and refuses success unless the live topology, build
+identity, 30-round relay, and five independent rate-limit bursts all pass.
 
-The source candidate is locally healthy and the live `/health` endpoint reports
-the exact candidate SHA. Release acceptance still fails because three claims in
-`.factory/claims.json` fail against the public deployment:
+- Work order: `haptic-beat-relay-repair-21`
+- Artifact: `web-with-backend`
+- Live URL: <https://haptic-beat-relay.sociobot.in>
+- Source report: [verification-22.md](verification-22.md)
 
-1. `RELAY_ROUNDS=30 npm run test:live-relay` timed out at the friend connection
-   twice on fresh runs.
-2. `RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit` accepted all 45
-   requests for a fresh client instead of limiting requests 41–45. An
-   independent fixed-client repeat also accepted 45/45. A 125-request probe
-   accepted 80 before returning 45 retryable limits.
-3. `npm run test:live-topology` observed Auto ingress instead of HTTP. Scoped
-   read-only evidence showed min/max 1/3 and three running ready replicas.
+## Reproduction before repair
 
-The deployed app is revision `sf-haptic-beat-relay--0000028` using image
-`sociobotregistry.azurecr.io/sf-haptic-beat-relay:891be09025e0`. That is not the
-committed singleton/full-SHA rollout. Process-local room, WebSocket, and
-rate-limit state is therefore split between replicas.
+- `npm run test:live-topology` failed with live ingress `auto` instead of
+  `http`. Scoped inspection showed a 1–3 scale range and no `/data` mount.
+- `RELAY_ROUNDS=30 npm run test:live-relay` failed at the companion connection
+  wait in `verify-live-relay.mjs:72`, matching the independent verifier.
+- The first repeated rate probe happened to pass 40/5 for all five identities.
+  The verifier's 45/45 and 80/45 evidence remains explained by per-process
+  counters across three replicas.
+- `cargo fmt --check` reproduced the verifier's formatting diff.
+- The 390 px screenshot reproduced headline words split across lines.
 
-## What was verified
+## Repairs
 
-- All 16 claim commands were run before broader QA: 13 passed and 3 failed.
-- The cold first-read and one-click sample gate passed.
-- `npm ci`, `npm test`, `npm run build`,
-  `cargo build --release --locked`, strict Clippy, and `git diff --check` passed.
-- `cargo fmt --check` failed on formatting in the new regression test in
-  `src/lib.rs`.
-- Live desktop and 390 px mobile routes passed semantic, keyboard, visible
-  focus, touch-target, 200% text, reduced-motion, and Axe serious/critical
-  checks.
-- Cold, demo, and local-audio request logs showed no third-party runtime
-  traffic. Demo storage remained empty and marked audio bytes never left the
-  browser.
-- Security and cache headers match the product contract. Hashed assets are
-  immutable; HTML and `sw.js` are not cached as immutable.
-- Service-worker update and offline demo reload passed.
-- Lighthouse mobile scored 99 performance, 100 accessibility, 100 best
-  practices, and 100 SEO; LCP was 1.8 s, TBT 50 ms, CLS 0, total transfer 166
-  KiB.
-- The release binary starts with only `PORT`, serves the frontend/API, and
-  shuts down cleanly. Docker itself was unavailable in this worker.
+- Added a migrated SQLite store for temporary rooms and limiter buckets.
+  Production defaults to `/data/haptic-beat-relay.sqlite3`; local execution
+  falls back beside the binary. Active room codes survive restart and expire
+  after two hours. Stale companion leases are released at startup.
+- Made the exact 40-request window one atomic SQLite upsert. Request arrival
+  time is captured before storage contention, so a simultaneous burst cannot
+  gain extra allowance while queued. All three room endpoints share it.
+- Kept WebSocket fan-out deliberately singleton and strengthened the guarded
+  deployment. It now renders the Azure Files mount, full-SHA image,
+  SHA-derived revision suffix, one-replica scale, and HTTP ingress.
+- Extended live topology checks to require the `/data` volume on both the app
+  template and active revision.
+- Added regressions for shared room access across pools, shared rate limits
+  across three pools, restart continuity, TTL eviction, every API route,
+  30 fresh desktop-host/390 px companion rounds, response headers, and mobile
+  word integrity.
+- Reduced the mobile display size while retaining emergency wrapping for
+  200% text on longer legal headings.
+- Updated privacy, README, claims, copy audit, and screenshots for the durable
+  temporary-state contract.
 
-## Required next steps
+## Verification evidence
 
-1. Redeploy this exact candidate through the guarded deployment path so ingress
-   is HTTP, min/max/running replicas are exactly one, the image uses the full
-   SHA, and the revision has the SHA-derived suffix.
+- Clean install: `npm ci` — 59 packages, 0 vulnerabilities.
+- Full gate: `npm test` — 3 Vitest tests, 12 Rust tests, release/deployment/
+  handoff contracts, 2 clean-entrypoint checks, then 37 Playwright checks
+  passed with 3 intentional project skips.
+- Formatting and lint: `cargo fmt --check` and
+  `cargo clippy --all-targets --all-features -- -D warnings` passed.
+- Production builds: `npm run build` and `cargo build --release --locked`
+  passed. Output is 24,403 B JavaScript and 17,506 B CSS; the mobile hero is
+  26,186 B.
+- Exact local relay: `RELAY_BASE_URL=http://127.0.0.1:18080 RELAY_ROUNDS=30
+  npm run test:live-relay` passed 30/30 API create→join checks and 30/30 fresh
+  desktop-host/390 px companion WebSocket rounds.
+- Exact local rate limit: five fresh client identities each received 40 × 200
+  and 5 × 429 with `Retry-After: 1`.
+- Load smoke: 100 concurrent creates from distinct clients returned 100 × 200
+  in 191 ms.
+- Browser coverage includes desktop and 390 px mobile, keyboard-only recovery,
+  Axe serious/critical scans, 200% text, 44 px touch targets, reduced motion,
+  no third-party requests, local-only audio, offline service-worker reload,
+  update activation, and response/cache policies.
+- Fresh screenshots: [desktop](evidence/screenshot-desktop.png) and
+  [390 px mobile](evidence/screenshot-mobile.png). Both had one H1, one main,
+  no console errors, no third-party requests, and no split headline words.
+- Lighthouse 12.8.2 mobile: performance 100, accessibility 100, best practices
+  100, SEO 100; FCP 1.1 s, LCP 1.7 s, TBT 30 ms, CLS 0, transfer 168 KiB.
+- Minimal environment: the release binary started with only `PORT=18080`,
+  defaulted SQLite beside the binary, served health/API/UI, and shut down on
+  SIGINT without a secret.
 
-   ```sh
-   npm run deploy -- "$(git rev-parse HEAD)"
-   RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
-   ```
-2. From a fresh verifier, rerun all three live claims. Do not accept an
-   intermittent pass: the 30-round relay and all five independent rate-limit
-   bursts must pass in one release run.
-3. Run `cargo fmt`, commit that source-only formatting repair separately, and
-   keep `cargo fmt --check` in the gate.
-4. Adjust the 390 px hero type so words do not split across lines.
+## Release and live proof
 
-No product source, deployment, secrets, or infrastructure was changed during
-verification.
+The final handoff commit is deployed only with:
+
+```sh
+npm run deploy -- "$(git rev-parse HEAD)"
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
+RELAY_ROUNDS=30 npm run test:live-relay
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+```
+
+The deploy command itself repeats topology after a reconciliation window. It
+fails unless the active full-SHA revision has HTTP ingress, one ready replica,
+the configured `/data` mount, 30 stable rounds, and five exact 40/5 bursts.
+
+## Known gaps
+
+- Docker is not installed in this worker. The Dockerfile contract passed
+  locally; the guarded ACR build is the container build gate.
+- Package/consumer checks do not apply to this backend web application.
