@@ -30,12 +30,14 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
 ## Repairs
 
 - Added a migrated SQLite store for temporary rooms and limiter buckets.
-  Production defaults to `/data/haptic-beat-relay.sqlite3`; local execution
+  Production defaults to `/data/relay.sqlite3`; local execution
   falls back beside the binary. Active room codes survive restart and expire
   after two hours. Stale companion leases are released at startup.
 - Configured SQLite with a full-synchronous rollback journal and a 30-second
   busy timeout. WAL shared-memory files are unsafe on the Azure Files SMB
   mount, and the timeout lets an incoming revision wait for a retiring one.
+  The repaired store uses a clean `relay.sqlite3`; the unusable WAL database
+  created by the blocked first rollout never served traffic and is ignored.
 - Made the exact 40-request window one atomic SQLite upsert. Request arrival
   time is captured before storage contention, so a simultaneous burst cannot
   gain extra allowance while queued. All three room endpoints share it.

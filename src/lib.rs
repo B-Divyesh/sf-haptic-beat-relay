@@ -86,14 +86,14 @@ pub fn database_path() -> PathBuf {
 
     let durable_directory = FilePath::new("/data");
     if durable_directory.is_dir() {
-        return durable_directory.join("haptic-beat-relay.sqlite3");
+        return durable_directory.join("relay.sqlite3");
     }
 
     env::current_exe()
         .ok()
         .and_then(|path| path.parent().map(FilePath::to_path_buf))
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("haptic-beat-relay.sqlite3")
+        .join("relay.sqlite3")
 }
 
 pub async fn app(dist_dir: impl Into<String>) -> Result<Router, BoxError> {

@@ -27,7 +27,7 @@ cargo run
 Open <http://localhost:8080>. For frontend work, run `npm run dev` while the
 backend runs in another terminal.
 
-The container stores SQLite at `/data/haptic-beat-relay.sqlite3`. A local run
+The container stores SQLite at `/data/relay.sqlite3`. A local run
 uses `/data` when present, then falls back beside the executable. Set
 `RELAY_DATABASE_PATH` only when a different local test path is needed.
 
