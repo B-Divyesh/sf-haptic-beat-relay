@@ -38,7 +38,7 @@ case "$*" in
   *"containerapp show"*"ingress.transport"*) printf '%s\\n' "\${RELAY_FAKE_TRANSPORT:-Http}" ;;
   *"containerapp show"*"template.volumes"*) printf '1\\n' ;;
   *"containerapp show"*"volumeMounts"*) printf '1\\n' ;;
-  *"containerapp show"*"--output json"*) printf '%s\\n' '{"name":"sf-haptic-beat-relay","location":"eastus","type":"Microsoft.App/containerApps","properties":{"environmentId":"/subscriptions/test/resourceGroups/sociobot/providers/Microsoft.App/managedEnvironments/test","configuration":{},"template":{"containers":[{"name":"app","image":"old","env":[{"name":"PORT","value":"8080"}],"resources":{"cpu":0.5,"memory":"1Gi"}}],"scale":{"minReplicas":1,"maxReplicas":3}}}}' ;;
+  *"containerapp show"*"--output json"*) printf '%s\\n' '{"name":"sf-haptic-beat-relay","location":"eastus","type":"Microsoft.App/containerApps","properties":{"environmentId":"/subscriptions/test/resourceGroups/sociobot/providers/Microsoft.App/managedEnvironments/test","configuration":{},"template":{"containers":[{"name":"app","image":"old","env":[{"name":"PORT","value":"8080"}],"resources":{"cpu":0.5,"memory":"1Gi"},"volumeMounts":[{"volumeName":"data","mountPath":"/data"}]}],"volumes":[{"name":"data","storageName":"sf-haptic-beat-relay-data","storageType":"AzureFile"}],"scale":{"minReplicas":1,"maxReplicas":3}}}}' ;;
   *"revision list"*"length([?properties.active])"*) printf '1\\n' ;;
   *"revision list"*"trafficWeight"*) printf 'sf-haptic-beat-relay--r0123456789\\n' ;;
   *"ready"*) printf '%s\\n' "\${RELAY_FAKE_READY_REPLICAS:-1}" ;;

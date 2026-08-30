@@ -23,6 +23,9 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
   counters across three replicas.
 - `cargo fmt --check` reproduced the verifier's formatting diff.
 - The 390 px screenshot reproduced headline words split across lines.
+- The first durable `/data` rollout reproduced one additional live-only
+  failure: SQLite WAL initialization returned `database is locked` on the
+  Azure Files mount while revisions overlapped.
 
 ## Repairs
 
@@ -30,12 +33,16 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
   Production defaults to `/data/haptic-beat-relay.sqlite3`; local execution
   falls back beside the binary. Active room codes survive restart and expire
   after two hours. Stale companion leases are released at startup.
+- Configured SQLite with a full-synchronous rollback journal and a 30-second
+  busy timeout. WAL shared-memory files are unsafe on the Azure Files SMB
+  mount, and the timeout lets an incoming revision wait for a retiring one.
 - Made the exact 40-request window one atomic SQLite upsert. Request arrival
   time is captured before storage contention, so a simultaneous burst cannot
   gain extra allowance while queued. All three room endpoints share it.
 - Kept WebSocket fan-out deliberately singleton and strengthened the guarded
   deployment. It now renders the Azure Files mount, full-SHA image,
-  SHA-derived revision suffix, one-replica scale, and HTTP ingress.
+  SHA-derived revision suffix, one-replica scale, and HTTP ingress. It also
+  removes the factory helper's legacy alias for the same mounted volume.
 - Extended live topology checks to require the `/data` volume on both the app
   template and active revision.
 - Added regressions for shared room access across pools, shared rate limits
@@ -50,9 +57,11 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
 ## Verification evidence
 
 - Clean install: `npm ci` — 59 packages, 0 vulnerabilities.
-- Full gate: `npm test` — 3 Vitest tests, 12 Rust tests, release/deployment/
+- Full gate: `npm test` — 3 Vitest tests, 13 Rust tests, release/deployment/
   handoff contracts, 2 clean-entrypoint checks, then 37 Playwright checks
   passed with 3 intentional project skips.
+- The Azure Files regression holds an exclusive rollback-journal lock, proves
+  incoming startup waits for its release, and asserts `journal_mode=delete`.
 - Formatting and lint: `cargo fmt --check` and
   `cargo clippy --all-targets --all-features -- -D warnings` passed.
 - Production builds: `npm run build` and `cargo build --release --locked`
@@ -96,5 +105,5 @@ the configured `/data` mount, 30 stable rounds, and five exact 40/5 bursts.
 ## Known gaps
 
 - Docker is not installed in this worker. The Dockerfile contract passed
-  locally; the guarded ACR build is the container build gate.
+  locally, and the ACR multi-stage build passed as the container build gate.
 - Package/consumer checks do not apply to this backend web application.

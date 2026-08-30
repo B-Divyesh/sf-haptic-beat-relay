@@ -112,9 +112,14 @@ async fn app_with_database_path(
     let options = SqliteConnectOptions::new()
         .filename(database_path)
         .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(10));
+        // WAL relies on a shared-memory sidecar and is not safe on the Azure
+        // Files SMB mount used for /data. A rollback journal keeps locking in
+        // the database directory and works with the singleton deployment.
+        .journal_mode(SqliteJournalMode::Delete)
+        .synchronous(SqliteSynchronous::Full)
+        // A retiring revision can hold the database briefly while Azure moves
+        // traffic. Wait for that lock instead of crash-looping the new one.
+        .busy_timeout(Duration::from_secs(30));
     let database = SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
@@ -810,6 +815,53 @@ mod tests {
             "another process using the same database must accept the room's host token"
         );
         other_server.abort();
+    }
+
+    #[tokio::test]
+    async fn regression_azure_files_uses_rollback_journal_and_waits_for_rollout_lock() {
+        // The first durable /data rollout exposed that WAL cannot initialize
+        // reliably on Azure Files. Hold an exclusive rollback-journal lock as
+        // a retiring revision can, then prove the next app waits and starts.
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        let blocker_options = SqliteConnectOptions::new()
+            .filename(&database_path)
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Delete)
+            .synchronous(SqliteSynchronous::Full)
+            .busy_timeout(Duration::from_secs(2));
+        let blocker = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(blocker_options)
+            .await
+            .unwrap();
+        MIGRATOR.run(&blocker).await.unwrap();
+        sqlx::query("BEGIN EXCLUSIVE")
+            .execute(&blocker)
+            .await
+            .unwrap();
+
+        let initializing_path = database_path.clone();
+        let mut initializing = tokio::spawn(async move {
+            app_with_database_path("frontend/dist", initializing_path, ROOM_TTL).await
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !initializing.is_finished(),
+            "the incoming revision must wait while the outgoing revision holds the database"
+        );
+        sqlx::query("COMMIT").execute(&blocker).await.unwrap();
+
+        let started = tokio::time::timeout(Duration::from_secs(3), &mut initializing)
+            .await
+            .expect("startup should continue after the rollout lock is released")
+            .unwrap();
+        assert!(started.is_ok());
+        let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+            .fetch_one(&blocker)
+            .await
+            .unwrap();
+        assert_eq!(mode, "delete", "Azure Files must never use a WAL sidecar");
     }
 
     #[tokio::test]

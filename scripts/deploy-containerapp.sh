@@ -144,7 +144,10 @@ const container = template.containers[0];
 container.image = image;
 container.volumeMounts = (container.volumeMounts || []).filter((mount) => mount.volumeName !== volumeName && mount.mountPath !== mountPath);
 container.volumeMounts.push({ volumeName, mountPath });
-template.volumes = (template.volumes || []).filter((volume) => volume.name !== volumeName);
+// The factory storage helper historically called this volume `data`. Remove
+// any prior alias for the same storage registration before adding the one
+// canonical product-specific volume, otherwise every repair leaves an orphan.
+template.volumes = (template.volumes || []).filter((volume) => volume.name !== volumeName && volume.storageName !== storageName);
 template.volumes.push({ name: volumeName, storageName, storageType });
 template.scale = { ...(template.scale || {}), minReplicas: Number(min), maxReplicas: Number(max) };
 template.revisionSuffix = suffix;
