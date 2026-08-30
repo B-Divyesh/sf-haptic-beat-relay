@@ -1,8 +1,10 @@
 use std::{
     collections::HashMap,
+    env,
     net::{IpAddr, SocketAddr},
+    path::{Path as FilePath, PathBuf},
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
@@ -21,6 +23,11 @@ use futures_util::{SinkExt, StreamExt};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::{
+    migrate::Migrator,
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
+    Row, SqlitePool,
+};
 use tokio::sync::{broadcast, Mutex};
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -35,35 +42,23 @@ pub const BUILD_SHA: &str = match option_env!("BUILD_SHA") {
 
 const ROOM_TTL: Duration = Duration::from_secs(2 * 60 * 60);
 const RATE_WINDOW: Duration = Duration::from_secs(1);
+const RATE_RETENTION: Duration = Duration::from_secs(60);
 const RATE_BURST: u32 = 40;
+static MIGRATOR: Migrator = sqlx::migrate!();
+
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Clone)]
 pub struct AppState {
-    rooms: Arc<Mutex<HashMap<String, Room>>>,
-    rates: Arc<Mutex<HashMap<String, RateEntry>>>,
+    database: SqlitePool,
+    channels: Arc<Mutex<HashMap<String, broadcast::Sender<String>>>>,
     room_ttl: Duration,
 }
 
-struct Room {
+struct StoredRoom {
     host_token: String,
     companion_token: Option<String>,
-    expires_at: Instant,
-    channel: broadcast::Sender<String>,
-}
-
-struct RateEntry {
-    window_started: Instant,
-    count: u32,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            rooms: Arc::new(Mutex::new(HashMap::new())),
-            rates: Arc::new(Mutex::new(HashMap::new())),
-            room_ttl: ROOM_TTL,
-        }
-    }
+    expires_at_ms: i64,
 }
 
 #[derive(Serialize)]
@@ -84,15 +79,89 @@ struct SocketQuery {
     token: String,
 }
 
-pub fn app(dist_dir: impl Into<String>) -> Router {
-    app_with_room_ttl(dist_dir, ROOM_TTL)
+pub fn database_path() -> PathBuf {
+    if let Some(path) = env::var_os("RELAY_DATABASE_PATH") {
+        return PathBuf::from(path);
+    }
+
+    let durable_directory = FilePath::new("/data");
+    if durable_directory.is_dir() {
+        return durable_directory.join("haptic-beat-relay.sqlite3");
+    }
+
+    env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(FilePath::to_path_buf))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("haptic-beat-relay.sqlite3")
 }
 
-fn app_with_room_ttl(dist_dir: impl Into<String>, room_ttl: Duration) -> Router {
+pub async fn app(dist_dir: impl Into<String>) -> Result<Router, BoxError> {
+    app_with_database_path(dist_dir, database_path(), ROOM_TTL).await
+}
+
+async fn app_with_database_path(
+    dist_dir: impl Into<String>,
+    database_path: impl AsRef<FilePath>,
+    room_ttl: Duration,
+) -> Result<Router, BoxError> {
+    let database_path = database_path.as_ref();
+    if let Some(parent) = database_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let options = SqliteConnectOptions::new()
+        .filename(database_path)
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .busy_timeout(Duration::from_secs(10));
+    let database = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await?;
+    MIGRATOR.run(&database).await?;
+    let started_at_ms = now_millis();
+    sqlx::query("DELETE FROM rooms WHERE expires_at_ms <= ?")
+        .bind(started_at_ms)
+        .execute(&database)
+        .await?;
+    // A stopped process has no live companion socket. Release its persisted
+    // lease so the same friend can rejoin the durable room after a restart.
+    sqlx::query("UPDATE rooms SET companion_token = NULL WHERE companion_token IS NOT NULL")
+        .execute(&database)
+        .await?;
+    sqlx::query("DELETE FROM rate_limits WHERE window_started_ms <= ?")
+        .bind(started_at_ms - duration_millis(RATE_RETENTION))
+        .execute(&database)
+        .await?;
+    let active_rooms = sqlx::query("SELECT code, expires_at_ms FROM rooms")
+        .fetch_all(&database)
+        .await?;
+    let active_rates = sqlx::query("SELECT client, window_started_ms FROM rate_limits")
+        .fetch_all(&database)
+        .await?;
+
     let state = AppState {
+        database,
+        channels: Arc::new(Mutex::new(HashMap::new())),
         room_ttl,
-        ..AppState::default()
     };
+    for room in active_rooms {
+        schedule_room_expiry(state.clone(), room.get("code"), room.get("expires_at_ms"));
+    }
+    for rate in active_rates {
+        let window_started_ms = rate.get("window_started_ms");
+        schedule_rate_expiry(
+            state.database.clone(),
+            rate.get("client"),
+            window_started_ms,
+            window_started_ms + duration_millis(RATE_RETENTION),
+        );
+    }
+    Ok(app_with_state(dist_dir, state))
+}
+
+fn app_with_state(dist_dir: impl Into<String>, state: AppState) -> Router {
     let dist_dir = dist_dir.into();
     let api = Router::new()
         .route("/api/rooms", post(create_room))
@@ -182,37 +251,40 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok", "build_sha": BUILD_SHA }))
 }
 
-async fn create_room(State(state): State<AppState>) -> Json<RoomCreated> {
-    let mut rooms = state.rooms.lock().await;
-    rooms.retain(|_, room| !room_is_expired(room));
+async fn create_room(State(state): State<AppState>) -> Result<Json<RoomCreated>, ApiError> {
+    let now = now_millis();
+    sqlx::query("DELETE FROM rooms WHERE expires_at_ms <= ?")
+        .bind(now)
+        .execute(&state.database)
+        .await
+        .map_err(ApiError::database)?;
 
+    let host_token = random_code(32);
+    let expires_at_ms = now + duration_millis(state.room_ttl);
     let code = loop {
         let candidate = random_code(6);
-        if !rooms.contains_key(&candidate) {
+        let inserted = sqlx::query(
+            "INSERT OR IGNORE INTO rooms (code, host_token, companion_token, expires_at_ms) VALUES (?, ?, NULL, ?)",
+        )
+        .bind(&candidate)
+        .bind(&host_token)
+        .bind(expires_at_ms)
+        .execute(&state.database)
+        .await
+        .map_err(ApiError::database)?;
+        if inserted.rows_affected() == 1 {
             break candidate;
         }
     };
-    let host_token = random_code(32);
-    let (channel, _) = broadcast::channel(128);
-    let expires_at = Instant::now() + state.room_ttl;
-    rooms.insert(
-        code.clone(),
-        Room {
-            host_token: host_token.clone(),
-            companion_token: None,
-            expires_at,
-            channel,
-        },
-    );
+    channel_for(&state, &code).await;
 
     let created = RoomCreated {
         code,
         host_token,
         expires_in_seconds: state.room_ttl.as_secs(),
     };
-    drop(rooms);
-    schedule_room_expiry(state, created.code.clone(), expires_at);
-    Json(created)
+    schedule_room_expiry(state, created.code.clone(), expires_at_ms);
+    Ok(Json(created))
 }
 
 async fn join_room(
@@ -220,34 +292,37 @@ async fn join_room(
     Path(raw_code): Path<String>,
 ) -> Result<Json<RoomJoined>, ApiError> {
     let code = normalized_code(&raw_code)?;
-    let mut rooms = state.rooms.lock().await;
-    let room = rooms.get_mut(&code).ok_or_else(|| {
-        ApiError::new(
-            StatusCode::NOT_FOUND,
-            "room_not_found",
-            "That room is not open. Check the code with the host.",
-        )
-    })?;
-    if room_is_expired(room) {
-        rooms.remove(&code);
-        return Err(ApiError::new(
-            StatusCode::GONE,
-            "room_expired",
-            "That room expired. Ask the host to make a new room.",
-        ));
-    }
-    if room.companion_token.is_some() {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "room_full",
-            "That room already has a companion. Ask the host for a new room.",
-        ));
-    }
     let token = random_code(32);
-    room.companion_token = Some(token.clone());
-    Ok(Json(RoomJoined {
-        companion_token: token,
-    }))
+    let updated = sqlx::query(
+        "UPDATE rooms SET companion_token = ? WHERE code = ? AND companion_token IS NULL AND expires_at_ms > ?",
+    )
+    .bind(&token)
+    .bind(&code)
+    .bind(now_millis())
+    .execute(&state.database)
+    .await
+    .map_err(ApiError::database)?;
+    if updated.rows_affected() == 1 {
+        channel_for(&state, &code).await;
+        return Ok(Json(RoomJoined {
+            companion_token: token,
+        }));
+    }
+
+    match stored_room(&state.database, &code).await? {
+        Some(room) if room.expires_at_ms > now_millis() && room.companion_token.is_some() => {
+            Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "room_full",
+                "That room already has a companion. Ask the host for a new room.",
+            ))
+        }
+        Some(_) => {
+            delete_room(&state, &code).await?;
+            Err(room_not_found())
+        }
+        None => Err(room_not_found()),
+    }
 }
 
 async fn room_socket(
@@ -257,21 +332,13 @@ async fn room_socket(
     ws: WebSocketUpgrade,
 ) -> Result<Response, ApiError> {
     let code = normalized_code(&raw_code)?;
-    let mut rooms = state.rooms.lock().await;
-    let room = rooms.get(&code).ok_or_else(|| {
-        ApiError::new(
-            StatusCode::NOT_FOUND,
-            "room_not_found",
-            "That room is not open. Check the code with the host.",
-        )
-    })?;
-    if room_is_expired(room) {
-        rooms.remove(&code);
-        return Err(ApiError::new(
-            StatusCode::GONE,
-            "room_expired",
-            "That room expired. Ask the host to make a new room.",
-        ));
+    let room = stored_room(&state.database, &code)
+        .await?
+        .ok_or_else(room_not_found)?;
+    let now = now_millis();
+    if room.expires_at_ms <= now {
+        delete_room(&state, &code).await?;
+        return Err(room_not_found());
     }
     let valid = match query.role.as_str() {
         "host" => constant_time_eq(&query.token, &room.host_token),
@@ -288,15 +355,14 @@ async fn room_socket(
             "This room link is not valid. Join again with the room code.",
         ));
     }
-    let channel = room.channel.clone();
-    let expires_at = room.expires_at;
+    let channel = channel_for(&state, &code).await;
+    let expires_after = Duration::from_millis((room.expires_at_ms - now) as u64);
     let role = query.role;
     let token = query.token;
-    drop(rooms);
 
     Ok(ws
         .on_upgrade(move |socket| {
-            socket_session(socket, channel, role, token, code, expires_at, state)
+            socket_session(socket, channel, role, token, code, expires_after, state)
         })
         .into_response())
 }
@@ -307,12 +373,12 @@ async fn socket_session(
     role: String,
     token: String,
     code: String,
-    expires_at: Instant,
+    expires_after: Duration,
     state: AppState,
 ) {
     let (mut socket_tx, mut socket_rx) = socket.split();
     let mut room_rx = channel.subscribe();
-    let expiry = tokio::time::sleep_until(tokio::time::Instant::from_std(expires_at));
+    let expiry = tokio::time::sleep(expires_after);
     tokio::pin!(expiry);
     let joined = json!({ "type": "presence", "role": role, "connected": true }).to_string();
     let _ = channel.send(joined);
@@ -354,41 +420,77 @@ async fn socket_session(
     }
     let _ = socket_tx.send(Message::Close(None)).await;
     if role == "companion" {
-        let mut rooms = state.rooms.lock().await;
-        if let Some(room) = rooms.get_mut(&code) {
-            if room
-                .companion_token
-                .as_ref()
-                .is_some_and(|current| constant_time_eq(current, &token))
-            {
-                room.companion_token = None;
-            }
-        }
+        let _ = sqlx::query(
+            "UPDATE rooms SET companion_token = NULL WHERE code = ? AND companion_token = ?",
+        )
+        .bind(&code)
+        .bind(&token)
+        .execute(&state.database)
+        .await;
     }
     let left = json!({ "type": "presence", "role": role, "connected": false }).to_string();
     let _ = channel.send(left);
 }
 
-fn room_is_expired(room: &Room) -> bool {
-    Instant::now() >= room.expires_at
+async fn stored_room(database: &SqlitePool, code: &str) -> Result<Option<StoredRoom>, ApiError> {
+    sqlx::query("SELECT host_token, companion_token, expires_at_ms FROM rooms WHERE code = ?")
+        .bind(code)
+        .fetch_optional(database)
+        .await
+        .map(|row| {
+            row.map(|row| StoredRoom {
+                host_token: row.get("host_token"),
+                companion_token: row.get("companion_token"),
+                expires_at_ms: row.get("expires_at_ms"),
+            })
+        })
+        .map_err(ApiError::database)
 }
 
-fn schedule_room_expiry(state: AppState, code: String, expires_at: Instant) {
+async fn channel_for(state: &AppState, code: &str) -> broadcast::Sender<String> {
+    let mut channels = state.channels.lock().await;
+    channels
+        .entry(code.to_owned())
+        .or_insert_with(|| broadcast::channel(128).0)
+        .clone()
+}
+
+async fn delete_room(state: &AppState, code: &str) -> Result<(), ApiError> {
+    sqlx::query("DELETE FROM rooms WHERE code = ?")
+        .bind(code)
+        .execute(&state.database)
+        .await
+        .map_err(ApiError::database)?;
+    state.channels.lock().await.remove(code);
+    Ok(())
+}
+
+fn schedule_room_expiry(state: AppState, code: String, expires_at_ms: i64) {
     tokio::spawn(async move {
-        tokio::time::sleep_until(tokio::time::Instant::from_std(expires_at)).await;
-        let channel = {
-            let mut rooms = state.rooms.lock().await;
-            let should_remove = rooms
-                .get(&code)
-                .is_some_and(|room| room.expires_at == expires_at);
-            should_remove
-                .then(|| rooms.remove(&code).map(|room| room.channel))
-                .flatten()
-        };
-        if let Some(channel) = channel {
-            let _ = channel.send(json!({ "type": "room_expired" }).to_string());
+        let delay = expires_at_ms.saturating_sub(now_millis()) as u64;
+        tokio::time::sleep(Duration::from_millis(delay)).await;
+        let deleted = sqlx::query("DELETE FROM rooms WHERE code = ? AND expires_at_ms = ?")
+            .bind(&code)
+            .bind(expires_at_ms)
+            .execute(&state.database)
+            .await
+            .map(|result| result.rows_affected() == 1)
+            .unwrap_or(false);
+        let channel = state.channels.lock().await.remove(&code);
+        if deleted {
+            if let Some(channel) = channel {
+                let _ = channel.send(json!({ "type": "room_expired" }).to_string());
+            }
         }
     });
+}
+
+fn room_not_found() -> ApiError {
+    ApiError::new(
+        StatusCode::NOT_FOUND,
+        "room_not_found",
+        "That room is not open. Check the code with the host.",
+    )
 }
 
 fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
@@ -427,18 +529,24 @@ async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next:
         .unwrap_or("direct")
         .to_string();
 
-    let mut rates = state.rates.lock().await;
-    // Entries only matter for one burst window. Pruning here keeps forwarded
-    // client identities from accumulating in this intentionally ephemeral
-    // service without introducing a cross-client quota.
-    rates.retain(|_, entry| entry.window_started.elapsed() < RATE_WINDOW);
-    let entry = rates.entry(client).or_insert(RateEntry {
-        window_started: Instant::now(),
-        count: 0,
-    });
-    let client_limited = consume_rate_slot(entry);
-    if client_limited {
-        drop(rates);
+    // Capture arrival time before waiting for SQLite's single writer. This
+    // makes a simultaneous 45-request burst one window even on slower durable
+    // storage, while the transaction keeps the allowance exact across pools.
+    let requested_at_ms = now_millis();
+    let (count, window_started_ms) =
+        match consume_rate_slot(&state.database, &client, requested_at_ms).await {
+            Ok(result) => result,
+            Err(error) => return ApiError::database(error).into_response(),
+        };
+    if count == 1 {
+        schedule_rate_expiry(
+            state.database.clone(),
+            client,
+            window_started_ms,
+            window_started_ms + duration_millis(RATE_RETENTION),
+        );
+    }
+    if count > RATE_BURST {
         let mut response = ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limited",
@@ -450,17 +558,63 @@ async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next:
             .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
         return response;
     }
-    drop(rates);
     next.run(request).await
 }
 
-fn consume_rate_slot(entry: &mut RateEntry) -> bool {
-    if entry.window_started.elapsed() >= RATE_WINDOW {
-        entry.window_started = Instant::now();
-        entry.count = 0;
-    }
-    entry.count += 1;
-    entry.count > RATE_BURST
+async fn consume_rate_slot(
+    database: &SqlitePool,
+    client: &str,
+    requested_at_ms: i64,
+) -> Result<(u32, i64), sqlx::Error> {
+    let row = sqlx::query(
+        "INSERT INTO rate_limits (client, window_started_ms, request_count) VALUES (?, ?, 1) \
+         ON CONFLICT(client) DO UPDATE SET \
+           request_count = CASE WHEN ? - rate_limits.window_started_ms >= ? THEN 1 ELSE rate_limits.request_count + 1 END, \
+           window_started_ms = CASE WHEN ? - rate_limits.window_started_ms >= ? THEN ? ELSE rate_limits.window_started_ms END \
+         RETURNING request_count, window_started_ms",
+    )
+    .bind(client)
+    .bind(requested_at_ms)
+    .bind(requested_at_ms)
+    .bind(duration_millis(RATE_WINDOW))
+    .bind(requested_at_ms)
+    .bind(duration_millis(RATE_WINDOW))
+    .bind(requested_at_ms)
+    .fetch_one(database)
+    .await?;
+    Ok((
+        row.get::<i64, _>("request_count") as u32,
+        row.get("window_started_ms"),
+    ))
+}
+
+fn schedule_rate_expiry(
+    database: SqlitePool,
+    client: String,
+    window_started_ms: i64,
+    expires_at_ms: i64,
+) {
+    tokio::spawn(async move {
+        let delay = expires_at_ms.saturating_sub(now_millis()) as u64;
+        tokio::time::sleep(Duration::from_millis(delay)).await;
+        let _ = sqlx::query("DELETE FROM rate_limits WHERE client = ? AND window_started_ms = ?")
+            .bind(client)
+            .bind(window_started_ms)
+            .execute(&database)
+            .await;
+    });
+}
+
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(i64::MAX as u128) as i64
+}
+
+fn duration_millis(duration: Duration) -> i64 {
+    duration.as_millis().min(i64::MAX as u128) as i64
 }
 
 // Azure ingress can provide the first X-Forwarded-For hop as `IP:port`.
@@ -528,6 +682,15 @@ impl ApiError {
             message,
         }
     }
+
+    fn database(error: sqlx::Error) -> Self {
+        tracing::error!(error = %error, "relay database request failed");
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "relay_unavailable",
+            "The relay could not save this request. Wait a moment and try again.",
+        )
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -544,11 +707,30 @@ impl IntoResponse for ApiError {
 mod tests {
     use super::*;
     use axum::http::Request;
+    use tempfile::TempDir;
     use tower::ServiceExt;
+
+    async fn isolated_app(room_ttl: Duration) -> (Router, TempDir) {
+        let directory = tempfile::tempdir().unwrap();
+        let application = app_with_database_path(
+            "frontend/dist",
+            directory.path().join("relay.sqlite3"),
+            room_ttl,
+        )
+        .await
+        .unwrap();
+        (application, directory)
+    }
+
+    async fn app_at(database_path: impl AsRef<FilePath>, room_ttl: Duration) -> Router {
+        app_with_database_path("frontend/dist", database_path, room_ttl)
+            .await
+            .unwrap()
+    }
 
     #[tokio::test]
     async fn creates_and_joins_a_room() {
-        let application = app("frontend/dist");
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
         let create = application
             .clone()
             .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
@@ -573,13 +755,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn regression_p0_separate_process_room_state_reproduces_create_then_join_404() {
-        // This is the exact production failure reported in verification 17:
-        // an HTTP create reaches one process and the immediate companion join
-        // reaches another process with a different in-memory room map. The
-        // singleton deployment contract is the only supported topology while
-        // the product deliberately keeps its room state ephemeral.
-        let creator_process = app("frontend/dist");
+    async fn regression_p0_separate_processes_share_room_records_in_sqlite() {
+        // Verification 22 reproduced an HTTP create on one process followed by
+        // a companion join and WebSocket upgrade on another process. Durable
+        // SQLite makes both room lookups coherent even if deployment topology
+        // drifts while the singleton guard protects live broadcast fan-out.
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        let creator_process = app_at(&database_path, ROOM_TTL).await;
         let created = creator_process
             .clone()
             .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
@@ -594,7 +777,9 @@ mod tests {
         let code = room["code"].as_str().unwrap();
         let token = room["host_token"].as_str().unwrap();
 
-        let secondary_join = app("frontend/dist")
+        let secondary_process = app_at(&database_path, ROOM_TTL).await;
+        let secondary_join = secondary_process
+            .clone()
             .oneshot(
                 Request::post(format!("/api/rooms/{code}/join"))
                     .body(Body::empty())
@@ -604,21 +789,14 @@ mod tests {
             .unwrap();
         assert_eq!(
             secondary_join.status(),
-            StatusCode::NOT_FOUND,
-            "a companion routed to another process sees the verification-17 room_not_found failure"
+            StatusCode::OK,
+            "a companion routed to another process must find the durable room"
         );
 
-        let creator_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let creator_address = creator_listener.local_addr().unwrap();
-        let creator_server = tokio::spawn(async move {
-            axum::serve(creator_listener, creator_process)
-                .await
-                .unwrap();
-        });
         let other_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let other_address = other_listener.local_addr().unwrap();
         let other_server = tokio::spawn(async move {
-            axum::serve(other_listener, app("frontend/dist"))
+            axum::serve(other_listener, secondary_process)
                 .await
                 .unwrap();
         });
@@ -627,28 +805,16 @@ mod tests {
             "ws://{other_address}/api/rooms/{code}/socket?role=host&token={token}"
         ))
         .await;
-        match secondary_result {
-            Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
-                assert_eq!(response.status(), StatusCode::NOT_FOUND);
-            }
-            other => panic!("the separate process must reject the upgrade with 404, got {other:?}"),
-        }
-
-        let creator_result = tokio_tungstenite::connect_async(format!(
-            "ws://{creator_address}/api/rooms/{code}/socket?role=host&token={token}"
-        ))
-        .await;
         assert!(
-            creator_result.is_ok(),
-            "the room-owning process must accept the upgrade"
+            secondary_result.is_ok(),
+            "another process using the same database must accept the room's host token"
         );
-        creator_server.abort();
         other_server.abort();
     }
 
     #[tokio::test]
     async fn rate_limit_uses_forwarded_client_ip() {
-        let application = app("frontend/dist");
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
         let mut last = StatusCode::OK;
         for _ in 0..41 {
             last = application
@@ -668,7 +834,7 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limit_groups_forwarded_ip_addresses_despite_changing_ports() {
-        let application = app("frontend/dist");
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
         let mut last = StatusCode::OK;
         for port in 40_000..40_041 {
             last = application
@@ -688,7 +854,7 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limit_gives_each_forwarded_client_its_own_40_request_allowance() {
-        let application = app("frontend/dist");
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
         let responses = futures_util::future::join_all((1..=100).map(|octet| {
             application.clone().oneshot(
                 Request::post("/api/rooms")
@@ -710,7 +876,7 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limit_returns_retry_after_after_exactly_40_requests_per_client() {
-        let application = app("frontend/dist");
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
         let mut statuses = Vec::new();
         let mut retry_after = Vec::new();
         for _ in 0..45 {
@@ -749,14 +915,74 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn regression_p0_concurrent_45_request_burst_has_exactly_40_accepts_and_5_retryable_limits()
-    {
+    async fn every_room_endpoint_uses_the_shared_rate_limiter() {
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
+        for request_number in 1..=40 {
+            let response = application
+                .clone()
+                .oneshot(
+                    Request::post("/api/rooms/ABCDEF/join")
+                        .header("x-forwarded-for", "198.51.100.61")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "join request {request_number}"
+            );
+        }
+        let limited_join = application
+            .clone()
+            .oneshot(
+                Request::post("/api/rooms/ABCDEF/join")
+                    .header("x-forwarded-for", "198.51.100.61")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(limited_join.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        for request_number in 1..=40 {
+            let response = application
+                .clone()
+                .oneshot(
+                    Request::get("/api/rooms/ABCDEF/socket?role=host&token=BAD")
+                        .header("x-forwarded-for", "198.51.100.62")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_ne!(
+                response.status(),
+                StatusCode::TOO_MANY_REQUESTS,
+                "socket request {request_number}"
+            );
+        }
+        let limited_socket = application
+            .oneshot(
+                Request::get("/api/rooms/ABCDEF/socket?role=host&token=BAD")
+                    .header("x-forwarded-for", "198.51.100.62")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(limited_socket.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn regression_p0_concurrent_45_request_burst_has_exactly_40_accepts_and_5_retryable_limits(
+    ) {
         // Verification 21 sends its 45 requests at once. Exercise that same
-        // shape in one process so the mutex-backed bucket cannot accidentally
-        // admit an extra request when many handlers arrive together. A live
-        // multi-process deployment is separately rejected by the singleton
-        // topology claim below and by the deploy contract.
-        let application = app("frontend/dist");
+        // shape in one process so the SQLite upsert cannot admit an extra
+        // request when many handlers arrive together. Cross-pool behavior is
+        // covered separately below.
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
         let responses = futures_util::future::join_all((0..45).map(|_| {
             application.clone().oneshot(
                 Request::post("/api/rooms")
@@ -767,10 +993,7 @@ mod tests {
         }))
         .await;
 
-        let responses: Vec<Response> = responses
-            .into_iter()
-            .map(Result::unwrap)
-            .collect();
+        let responses: Vec<Response> = responses.into_iter().map(Result::unwrap).collect();
         assert_eq!(
             responses
                 .iter()
@@ -789,63 +1012,63 @@ mod tests {
             "the remaining five simultaneous requests must be limited"
         );
         assert!(limited.iter().all(|response| {
-            response.headers().get(header::RETRY_AFTER)
-                == Some(&HeaderValue::from_static("1"))
+            response.headers().get(header::RETRY_AFTER) == Some(&HeaderValue::from_static("1"))
         }));
     }
 
     #[tokio::test]
-    async fn regression_p0_three_process_limiters_admit_all_45_requests() {
-        // This is the exact verification-17 allowance failure. Three
-        // process-local replicas each own a fresh counter, so a 45-request
-        // burst from one forwarded client is incorrectly admitted in full.
-        // The guarded Container App deployment must retain one ready replica
-        // until these ephemeral buckets move to shared infrastructure.
-        let first_process = app("frontend/dist");
-        let second_process = app("frontend/dist");
-        let third_process = app("frontend/dist");
-        let mut statuses = Vec::new();
-
-        for request_number in 0..45 {
+    async fn regression_p0_three_process_limiters_share_exact_40_request_allowance() {
+        // Verification 22 observed 80 accepts because three processes owned
+        // separate counters. Three independent pools now use one SQLite row,
+        // so the first 40 requests consume the shared allowance exactly once.
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        let first_process = app_at(&database_path, ROOM_TTL).await;
+        let second_process = app_at(&database_path, ROOM_TTL).await;
+        let third_process = app_at(&database_path, ROOM_TTL).await;
+        let responses = futures_util::future::join_all((0..45).map(|request_number| {
             let application = match request_number % 3 {
                 0 => first_process.clone(),
                 1 => second_process.clone(),
                 _ => third_process.clone(),
             };
-            let response = application
-                .oneshot(
-                    Request::post("/api/rooms")
-                        .header("x-forwarded-for", "198.51.100.80")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            statuses.push(response.status());
-        }
+            application.oneshot(
+                Request::post("/api/rooms")
+                    .header("x-forwarded-for", "198.51.100.80")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        }))
+        .await;
+        let statuses: Vec<StatusCode> = responses
+            .into_iter()
+            .map(|response| response.unwrap().status())
+            .collect();
 
         assert_eq!(
             statuses
                 .iter()
                 .filter(|&&status| status == StatusCode::OK)
                 .count(),
-            45,
-            "three process-local limiters reproduce the unsafe 45/45 allowance"
+            40,
+            "all pools must share one exact allowance"
         );
         assert_eq!(
             statuses
                 .iter()
                 .filter(|&&status| status == StatusCode::TOO_MANY_REQUESTS)
                 .count(),
-            0
+            5
         );
     }
 
     #[tokio::test]
     // @claim:ephemeral-rooms
-    async fn claim_ephemeral_rooms_evict_after_the_configured_ttl_and_on_restart() {
+    async fn claim_ephemeral_rooms_persist_across_restart_until_the_configured_ttl() {
         assert_eq!(ROOM_TTL, Duration::from_secs(7_200));
-        let application = app_with_room_ttl("frontend/dist", Duration::from_millis(40));
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        let application = app_at(&database_path, Duration::from_millis(200)).await;
         let create = application
             .clone()
             .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
@@ -859,8 +1082,7 @@ mod tests {
         .unwrap();
         let code = created["code"].as_str().unwrap();
 
-        tokio::time::sleep(Duration::from_millis(70)).await;
-        let expired_join = application
+        let first_join = application
             .clone()
             .oneshot(
                 Request::post(format!("/api/rooms/{code}/join"))
@@ -869,9 +1091,12 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(expired_join.status(), StatusCode::NOT_FOUND);
+        assert_eq!(first_join.status(), StatusCode::OK);
 
-        let restarted = app("frontend/dist")
+        drop(application);
+        let restarted = app_at(&database_path, Duration::from_millis(200)).await;
+        let persisted_join = restarted
+            .clone()
             .oneshot(
                 Request::post(format!("/api/rooms/{code}/join"))
                     .body(Body::empty())
@@ -879,12 +1104,23 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(restarted.status(), StatusCode::NOT_FOUND);
+        assert_eq!(persisted_join.status(), StatusCode::OK);
+
+        tokio::time::sleep(Duration::from_millis(230)).await;
+        let expired_join = restarted
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/join"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(expired_join.status(), StatusCode::NOT_FOUND);
         assert_expiring_room_closes_an_open_websocket().await;
     }
 
     async fn assert_expiring_room_closes_an_open_websocket() {
-        let application = app_with_room_ttl("frontend/dist", Duration::from_millis(80));
+        let (application, _storage) = isolated_app(Duration::from_millis(80)).await;
         let create = application
             .clone()
             .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
@@ -927,7 +1163,8 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_frontend_routes_return_http_not_found() {
-        let response = app("frontend/dist")
+        let (application, _storage) = isolated_app(ROOM_TTL).await;
+        let response = application
             .oneshot(
                 Request::get("/not-a-real-page")
                     .body(Body::empty())

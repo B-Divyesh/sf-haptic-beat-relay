@@ -11,10 +11,17 @@
     "minReplicas": 1,
     "maxReplicas": 1
   },
+  "dataDir": "/data",
+  "storage": {
+    "volumeName": "sf-haptic-beat-relay-data",
+    "storageName": "sf-haptic-beat-relay-data",
+    "storageType": "AzureFile",
+    "mountPath": "/data"
+  },
   "stateTopology": {
-    "roomState": "ephemeral process-local memory",
-    "webSocketBroadcast": "ephemeral process-local memory",
-    "rateLimitBuckets": "ephemeral process-local memory",
-    "persistence": "none; rooms expire after two hours and a restart clears them"
+    "roomState": "temporary records in durable SQLite under /data",
+    "webSocketBroadcast": "process-local broadcast protected by singleton deployment",
+    "rateLimitBuckets": "shared SQLite counters under /data",
+    "persistence": "rooms survive restarts and expire after two hours"
   }
 }

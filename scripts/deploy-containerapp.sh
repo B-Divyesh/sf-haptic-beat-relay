@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
-# Deploy the relay with the one-process contract required by its ephemeral,
-# process-local room store. The post-deploy checks are deliberate: a desired
-# setting in source does not make separately routed HTTP and WebSocket traffic
+# Deploy the relay with durable SQLite and the one-process contract required
+# by its live WebSocket broadcast channels. The post-deploy checks are
+# deliberate: a desired setting in source does not make the public runtime
 # coherent unless Azure has applied it to the live revision.
 set -eu
 
@@ -11,11 +11,9 @@ if [ ! -f "$config_file" ]; then
   exit 2
 fi
 
-# The factory's generic container helper intentionally uses Auto ingress and a
-# 1–3 replica range. That default is unsafe for this product because its room,
-# WebSocket, and rate-limit state are deliberately ephemeral and process
-# local. Read the committed product configuration here so the only supported
-# deploy command has one concrete source of truth for the singleton topology.
+# The generic container helper can restore Auto ingress, a 1–3 replica range,
+# and no data mount. Read the committed product configuration here so the only
+# supported deploy command has one source of truth for topology and storage.
 config_values="$(node -e '
 const fs = require("node:fs");
 const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -28,6 +26,11 @@ const values = [
   config.ingress && config.ingress.transport,
   config.scale && config.scale.minReplicas,
   config.scale && config.scale.maxReplicas,
+  config.dataDir,
+  config.storage && config.storage.volumeName,
+  config.storage && config.storage.storageName,
+  config.storage && config.storage.storageType,
+  config.storage && config.storage.mountPath,
 ];
 if (values.some((value) => !["string", "number"].includes(typeof value))) process.exit(2);
 process.stdout.write(values.join("\n"));
@@ -45,12 +48,17 @@ process.stdout.write(values.join("\n"));
   IFS= read -r ingress_transport
   IFS= read -r min_replicas
   IFS= read -r max_replicas
+  IFS= read -r data_dir
+  IFS= read -r volume_name
+  IFS= read -r storage_name
+  IFS= read -r storage_type
+  IFS= read -r mount_path
 } <<EOF
 $config_values
 EOF
 
-if [ "$active_revisions_mode" != "Single" ] || [ "$ingress_transport" != "http" ] || [ "$min_replicas" != "1" ] || [ "$max_replicas" != "1" ]; then
-  echo "Relay deployment configuration must require Single revisions, HTTP ingress, and exactly one replica." >&2
+if [ "$active_revisions_mode" != "Single" ] || [ "$ingress_transport" != "http" ] || [ "$min_replicas" != "1" ] || [ "$max_replicas" != "1" ] || [ "$data_dir" != "/data" ] || [ "$mount_path" != "$data_dir" ] || [ "$storage_type" != "AzureFile" ]; then
+  echo "Relay deployment configuration must require Single revisions, HTTP ingress, exactly one replica, and its Azure Files volume at /data." >&2
   exit 2
 fi
 
@@ -108,22 +116,45 @@ az acr build \
   --build-arg "BUILD_SHA=$revision" \
   .
 
-# This product intentionally keeps ephemeral rooms, authenticated WebSocket
-# sessions, and the per-client limiter in one process. Make that runtime
-# boundary explicit before creating the revision; source JSON alone cannot
-# protect a deployment made through a different CLI path.
+# SQLite keeps temporary rooms and rate buckets on durable storage. WebSocket
+# subscribers still live in one process, so make the singleton boundary
+# explicit before creating the revision.
 az containerapp revision set-mode \
   --resource-group "$resource_group" \
   --name "$container_app" \
   --mode single
 
+deployment_temp="$(mktemp -d)"
+trap 'rm -rf "$deployment_temp"' EXIT HUP INT TERM
+current_app="$deployment_temp/current-app.json"
+rendered_app="$deployment_temp/rendered-app.json"
+
+az containerapp show \
+  --resource-group "$resource_group" \
+  --name "$container_app" \
+  --output json > "$current_app"
+
+node -e '
+const fs = require("node:fs");
+const [input, output, appName, image, suffix, min, max, volumeName, storageName, storageType, mountPath] = process.argv.slice(1);
+const app = JSON.parse(fs.readFileSync(input, "utf8"));
+if (app.name !== appName || !app.properties?.template?.containers || app.properties.template.containers.length !== 1) process.exit(2);
+const template = app.properties.template;
+const container = template.containers[0];
+container.image = image;
+container.volumeMounts = (container.volumeMounts || []).filter((mount) => mount.volumeName !== volumeName && mount.mountPath !== mountPath);
+container.volumeMounts.push({ volumeName, mountPath });
+template.volumes = (template.volumes || []).filter((volume) => volume.name !== volumeName);
+template.volumes.push({ name: volumeName, storageName, storageType });
+template.scale = { ...(template.scale || {}), minReplicas: Number(min), maxReplicas: Number(max) };
+template.revisionSuffix = suffix;
+fs.writeFileSync(output, JSON.stringify(app));
+' "$current_app" "$rendered_app" "$container_app" "$registry.azurecr.io/$image_repository:$revision" "r$short_revision" "$min_replicas" "$max_replicas" "$volume_name" "$storage_name" "$storage_type" "$mount_path"
+
 az containerapp update \
   --resource-group "$resource_group" \
   --name "$container_app" \
-  --image "$registry.azurecr.io/$image_repository:$revision" \
-  --revision-suffix "r$short_revision" \
-  --min-replicas "$min_replicas" \
-  --max-replicas "$max_replicas"
+  --yaml "$rendered_app"
 
 # `containerapp update` creates the revision and can restore the platform
 # ingress default. Apply HTTP *after* that rollout so the configuration that
@@ -139,6 +170,8 @@ actual_mode="$(az containerapp show --resource-group "$resource_group" --name "$
 actual_min="$(az containerapp show --resource-group "$resource_group" --name "$container_app" --query 'properties.template.scale.minReplicas' --output tsv)"
 actual_max="$(az containerapp show --resource-group "$resource_group" --name "$container_app" --query 'properties.template.scale.maxReplicas' --output tsv)"
 actual_transport="$(az containerapp show --resource-group "$resource_group" --name "$container_app" --query 'properties.configuration.ingress.transport' --output tsv | tr '[:upper:]' '[:lower:]')"
+actual_volume="$(az containerapp show --resource-group "$resource_group" --name "$container_app" --query "properties.template.volumes[?name == '$volume_name' && storageName == '$storage_name' && storageType == '$storage_type'] | length(@)" --output tsv)"
+actual_mount="$(az containerapp show --resource-group "$resource_group" --name "$container_app" --query "properties.template.containers[0].volumeMounts[?volumeName == '$volume_name' && mountPath == '$mount_path'] | length(@)" --output tsv)"
 active_revisions=0
 active_revision=""
 running_replicas=0
@@ -156,13 +189,15 @@ done
 
 active_min="$(az containerapp revision show --resource-group "$resource_group" --name "$container_app" --revision "$active_revision" --query 'properties.template.scale.minReplicas' --output tsv)"
 active_max="$(az containerapp revision show --resource-group "$resource_group" --name "$container_app" --revision "$active_revision" --query 'properties.template.scale.maxReplicas' --output tsv)"
+active_volume="$(az containerapp revision show --resource-group "$resource_group" --name "$container_app" --revision "$active_revision" --query "properties.template.volumes[?name == '$volume_name' && storageName == '$storage_name' && storageType == '$storage_type'] | length(@)" --output tsv)"
+active_mount="$(az containerapp revision show --resource-group "$resource_group" --name "$container_app" --revision "$active_revision" --query "properties.template.containers[0].volumeMounts[?volumeName == '$volume_name' && mountPath == '$mount_path'] | length(@)" --output tsv)"
 
-if [ "$actual_mode" != "$active_revisions_mode" ] || [ "$actual_min" != "$min_replicas" ] || [ "$actual_max" != "$max_replicas" ] || [ "$actual_transport" != "$ingress_transport" ] || [ "$active_revisions" != "1" ] || [ -z "$active_revision" ] || [ "$active_min" != "$min_replicas" ] || [ "$active_max" != "$max_replicas" ] || [ "$running_replicas" != "1" ] || [ "$ready_replicas" != "1" ]; then
-  echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport active_revisions=$active_revisions active_revision=${active_revision:-none} active_min=${active_min:-none} active_max=${active_max:-none} running_replicas=$running_replicas ready_replicas=$ready_replicas" >&2
+if [ "$actual_mode" != "$active_revisions_mode" ] || [ "$actual_min" != "$min_replicas" ] || [ "$actual_max" != "$max_replicas" ] || [ "$actual_transport" != "$ingress_transport" ] || [ "$actual_volume" != "1" ] || [ "$actual_mount" != "1" ] || [ "$active_revisions" != "1" ] || [ -z "$active_revision" ] || [ "$active_min" != "$min_replicas" ] || [ "$active_max" != "$max_replicas" ] || [ "$active_volume" != "1" ] || [ "$active_mount" != "1" ] || [ "$running_replicas" != "1" ] || [ "$ready_replicas" != "1" ]; then
+  echo "Relay deployment contract was not applied: mode=$actual_mode min=$actual_min max=$actual_max transport=$actual_transport data_volume=$actual_volume data_mount=$actual_mount active_revisions=$active_revisions active_revision=${active_revision:-none} active_min=${active_min:-none} active_max=${active_max:-none} active_volume=$active_volume active_mount=$active_mount running_replicas=$running_replicas ready_replicas=$ready_replicas" >&2
   exit 1
 fi
 
-echo "Relay deployment contract verified: revision=$active_revision, one active, running, and ready replica, HTTP ingress."
+echo "Relay deployment contract verified: revision=$active_revision, one active, running, and ready replica, HTTP ingress, and durable /data mount."
 
 # Azure's resource view proves the topology. The live checks then prove that
 # independently routed HTTP create/join calls and WebSocket upgrades actually

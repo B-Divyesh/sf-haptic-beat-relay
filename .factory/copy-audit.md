@@ -1,4 +1,4 @@
-# Copy audit — polish 1
+# Copy audit — repair 21
 
 Counts use Unicode word tokens. Code commands are excluded. No audited sentence
 exceeds 22 words. No banned marketing term appears.
@@ -33,14 +33,15 @@ exceeds 22 words. No banned marketing term appears.
 | Vibration varies by browser and device | 6 | h2 |
 | Phone vibration and controller vibration vary by browser and device. | 10 | sentence |
 | The screen still flashes each cue when vibration is unavailable. | 10 | sentence |
-| Rooms hold only live relay messages. Closing the server clears every room. | 12 | sentence |
+| Rooms hold only live relay messages. Room records expire automatically after two hours. | 13 | sentence |
 | Send tactile beat cues between two devices. | 7 | footer |
 
 ## README
 
-README prose has 240 words across 30 sentences, for an 8-word average. The
-longest sentence has 16 words. It uses the same terms as the product: **friend**
-for the second participant and **audio loop** for the selected local sound.
+README prose was rescanned after the storage-contract repair. No prose sentence
+exceeds 22 words or contains a banned marketing word. It uses **friend** for
+the second participant, **audio loop** for local sound, and **room** for the
+temporary relay.
 
 ## Terminology
 

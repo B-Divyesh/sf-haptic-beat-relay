@@ -24,6 +24,17 @@ assert.equal(app.properties.configuration.activeRevisionsMode, deployment.active
 assert.equal(app.properties.configuration.ingress.transport.toLowerCase(), deployment.ingress.transport);
 assert.equal(app.properties.template.scale.minReplicas, deployment.scale.minReplicas);
 assert.equal(app.properties.template.scale.maxReplicas, deployment.scale.maxReplicas);
+const dataVolumes = app.properties.template.volumes?.filter((volume) =>
+  volume.name === deployment.storage.volumeName
+  && volume.storageName === deployment.storage.storageName
+  && volume.storageType === deployment.storage.storageType
+) ?? [];
+assert.equal(dataVolumes.length, 1, 'the durable relay volume must be attached exactly once');
+const dataMounts = app.properties.template.containers?.[0]?.volumeMounts?.filter((mount) =>
+  mount.volumeName === deployment.storage.volumeName
+  && mount.mountPath === deployment.dataDir
+) ?? [];
+assert.equal(dataMounts.length, 1, 'the durable relay volume must be mounted at /data exactly once');
 
 const revisions = azJson(['containerapp', 'revision', 'list', '--resource-group', resourceGroup, '--name', appName]);
 const active = revisions.filter((revision) => revision.properties.active);
@@ -35,6 +46,17 @@ assert.equal(active[0].properties.template.scale.maxReplicas, deployment.scale.m
 const revisionName = active[0].name;
 const containers = active[0].properties.template.containers;
 const expectedImage = `${deployment.registry}.azurecr.io/${deployment.imageRepository}:${expectedSha}`;
+const activeDataVolumes = active[0].properties.template.volumes?.filter((volume) =>
+  volume.name === deployment.storage.volumeName
+  && volume.storageName === deployment.storage.storageName
+  && volume.storageType === deployment.storage.storageType
+) ?? [];
+assert.equal(activeDataVolumes.length, 1, 'the active revision must use the durable relay volume');
+const activeDataMounts = containers?.[0]?.volumeMounts?.filter((mount) =>
+  mount.volumeName === deployment.storage.volumeName
+  && mount.mountPath === deployment.dataDir
+) ?? [];
+assert.equal(activeDataMounts.length, 1, 'the active revision must mount durable relay state at /data');
 
 // A matching /health response alone is not enough. The previous failed
 // release was rebuilt by the factory's generic container path: it baked the
@@ -74,6 +96,8 @@ console.log(JSON.stringify({
   runningReplicas: running.length,
   readyReplicas: ready.length,
   transport: app.properties.configuration.ingress.transport,
+  dataDir: deployment.dataDir,
+  dataVolume: dataVolumes[0].storageName,
   image: containers[0].image,
   buildSha: health.build_sha,
 }));

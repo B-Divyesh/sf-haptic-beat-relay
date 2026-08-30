@@ -10,11 +10,14 @@ ARG BUILD_SHA=dev
 ENV BUILD_SHA=${BUILD_SHA}
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
+COPY migrations ./migrations
 COPY src ./src
 RUN cargo build --release --locked
 
 FROM debian:bookworm-slim AS runtime
-RUN useradd --system --uid 10001 --create-home relay
+RUN useradd --system --uid 10001 --create-home relay \
+    && mkdir -p /data \
+    && chown relay:relay /data
 WORKDIR /app
 COPY --from=backend-builder /build/target/release/haptic-beat-relay /app/haptic-beat-relay
 COPY --from=frontend-builder /build/frontend/dist /app/frontend/dist

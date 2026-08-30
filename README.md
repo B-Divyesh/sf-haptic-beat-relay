@@ -27,6 +27,10 @@ cargo run
 Open <http://localhost:8080>. For frontend work, run `npm run dev` while the
 backend runs in another terminal.
 
+The container stores SQLite at `/data/haptic-beat-relay.sqlite3`. A local run
+uses `/data` when present, then falls back beside the executable. Set
+`RELAY_DATABASE_PATH` only when a different local test path is needed.
+
 ## Test
 
 ```sh
@@ -61,8 +65,9 @@ npm run test:live-topology
 - The friend receives phone and controller vibration when supported.
 - The screen flashes each cue when vibration is unavailable.
 
-Rooms expire after two hours and disappear on restart. The live relay runs as
-one Container App replica because its room state is process-local.
+Rooms expire after two hours. SQLite stores temporary room and rate-limit
+records under `/data`, so active rooms survive a restart. The live relay uses
+one Container App replica because WebSocket delivery is process-local.
 
 ## Container
 
@@ -81,10 +86,10 @@ npm run deploy -- <full-git-sha>
 ```
 
 This command is required for this product. It reads
-`deploy/containerapp.json`, pins HTTP ingress and one ready replica, and
-checks the live room relay before it returns. Do not use a generic container
-rollout: its Auto ingress and 1–3 replica defaults split this product's
-process-local rooms.
+`deploy/containerapp.json`, mounts durable storage at `/data`, pins HTTP
+ingress and one ready replica, and checks the live room relay before it
+returns. Do not use a generic rollout. Its Auto ingress and 1–3 replica
+defaults split live WebSocket delivery.
 
 ## Project records
 

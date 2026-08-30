@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
+const backendSource = readFileSync(new URL('../src/lib.rs', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../migrations/0001_shared_state.sql', import.meta.url), 'utf8');
 const rustBuilder = dockerfile.match(/^FROM\s+(rust:[^\s]+)\s+AS\s+backend-builder$/m);
 
 assert.ok(rustBuilder, 'Dockerfile must define a named backend-builder Rust stage');
@@ -15,6 +17,11 @@ assert.doesNotMatch(
   /^rust:\d+\.\d+/,
   'backend-builder must not pin a Rust minor version',
 );
+assert.match(dockerfile, /mkdir -p \/data/, 'the image must provide a writable durable-data mount point');
+assert.match(backendSource, /FilePath::new\("\/data"\)/, 'the runtime must default shared state to /data');
+assert.match(backendSource, /SqlitePoolOptions/, 'room and rate-limit state must use SQLite');
+assert.match(migration, /CREATE TABLE IF NOT EXISTS rooms/, 'the SQLite migration must create durable rooms');
+assert.match(migration, /CREATE TABLE IF NOT EXISTS rate_limits/, 'the SQLite migration must create shared rate buckets');
 
 console.log(`release contract ok: ${rustBuilder[1]}`);
 
@@ -25,7 +32,7 @@ assert.equal(deployment.activeRevisionsMode, 'Single');
 assert.deepEqual(
   deployment.scale,
   { minReplicas: 1, maxReplicas: 1 },
-  'the process-local ephemeral room store requires exactly one live replica',
+  'the process-local WebSocket broadcaster requires exactly one live replica',
 );
 assert.deepEqual(
   deployment.ingress,
@@ -33,14 +40,27 @@ assert.deepEqual(
   'WebSocket upgrades require explicit HTTP ingress for the single-process relay',
 );
 assert.deepEqual(
+  { dataDir: deployment.dataDir, storage: deployment.storage },
+  {
+    dataDir: '/data',
+    storage: {
+      volumeName: 'sf-haptic-beat-relay-data',
+      storageName: 'sf-haptic-beat-relay-data',
+      storageType: 'AzureFile',
+      mountPath: '/data',
+    },
+  },
+  'the deployment contract must mount the work-order data volume at /data',
+);
+assert.deepEqual(
   deployment.stateTopology,
   {
-    roomState: 'ephemeral process-local memory',
-    webSocketBroadcast: 'ephemeral process-local memory',
-    rateLimitBuckets: 'ephemeral process-local memory',
-    persistence: 'none; rooms expire after two hours and a restart clears them',
+    roomState: 'temporary records in durable SQLite under /data',
+    webSocketBroadcast: 'process-local broadcast protected by singleton deployment',
+    rateLimitBuckets: 'shared SQLite counters under /data',
+    persistence: 'rooms survive restarts and expire after two hours',
   },
-  'the deployment contract must document the ephemeral state topology that requires the singleton replica',
+  'the deployment contract must document its durable and singleton state boundaries',
 );
 
 const deployScript = readFileSync(new URL('./deploy-containerapp.sh', import.meta.url), 'utf8');
@@ -58,12 +78,16 @@ assert.match(deployScript, /git rev-parse --verify '@\{upstream\}'/, 'deployment
 assert.match(deployScript, /\[ "\$upstream_revision" != "\$checked_out_revision" \]/, 'deployment must reject an unpushed release');
 assert.match(deployScript, /git log -1 --format=%H -- \.factory\/handoff\.md/, 'deployment must require the final handoff in the released commit');
 assert.match(deployScript, /\[ "\$handoff_revision" != "\$checked_out_revision" \]/, 'deployment must reject a candidate whose handoff predates HEAD');
-assert.match(deployScript, /--min-replicas "\$min_replicas"\s+\\?\n\s*--max-replicas "\$max_replicas"/, 'deployment must apply the configured one-replica scale contract');
+assert.match(deployScript, /template\.scale = \{[\s\S]*minReplicas: Number\(min\), maxReplicas: Number\(max\)/, 'deployment must render the configured one-replica scale contract');
+assert.match(deployScript, /container\.volumeMounts\.push\(\{ volumeName, mountPath \}\)/, 'deployment must render the durable /data mount');
+assert.match(deployScript, /template\.volumes\.push\(\{ name: volumeName, storageName, storageType \}\)/, 'deployment must render the Azure Files volume');
 assert.match(deployScript, /containerapp revision set-mode[\s\S]*--mode single/, 'deployment must force single active-revision mode before each release');
 assert.match(deployScript, /az containerapp ingress update[\s\S]*--transport "\$ingress_transport"/, 'deployment must pin configured HTTP ingress for WebSocket upgrades');
 assert.match(deployScript, /active_revisions=.*revision list/, 'deployment must verify there is exactly one active revision');
 assert.match(deployScript, /actual_max=.*maxReplicas/, 'deployment must verify the applied maximum replica count');
 assert.match(deployScript, /active_max=.*revision show/, 'deployment must verify the active revision itself has a one-replica maximum');
+assert.match(deployScript, /active_volume=.*revision show/, 'deployment must verify the active revision uses the durable volume');
+assert.match(deployScript, /active_mount=.*revision show/, 'deployment must verify the active revision mounts the database at /data');
 assert.match(deployScript, /running_replicas=.*replica list/, 'deployment must wait for exactly one running active replica');
 assert.match(deployScript, /ready_replicas=.*properties\.containers\[0\]\.ready/, 'deployment must wait for exactly one ready active application container');
 assert.match(deployScript, /tr '\[:upper:\]' '\[:lower:\]'/, 'deployment must normalize Azure ingress transport casing before verification');
@@ -73,7 +97,7 @@ const ingressAfterRollout = deployScript.indexOf('az containerapp ingress update
 assert.ok(imageRollout >= 0, 'deployment must roll out the image');
 assert.match(
   deployScript,
-  /--image "\$registry\.azurecr\.io\/\$image_repository:\$revision"[\s\S]*--revision-suffix "r\$short_revision"/,
+  /container\.image = image;[\s\S]*template\.revisionSuffix = suffix;/,
   'the guarded rollout must use the configured full immutable SHA tag and an SHA-derived revision suffix',
 );
 assert.ok(

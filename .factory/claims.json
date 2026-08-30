@@ -57,15 +57,15 @@
   },
   {
     "id": "ephemeral-rooms",
-    "claim": "Room state stays in memory for up to two hours and disappears on restart.",
+    "claim": "Temporary room records survive a server restart and expire after two hours.",
     "where": "landing limits, privacy, README",
-    "test": "cargo test claim_ephemeral_rooms_evict_after_the_configured_ttl_and_on_restart",
-    "sandbox": "short controllable TTL; assert scheduled eviction rejects a join and a new server instance has no prior room"
+    "test": "cargo test claim_ephemeral_rooms_persist_across_restart_until_the_configured_ttl",
+    "sandbox": "temporary SQLite file and short controllable TTL; assert a new server instance can join before expiry and rejects the room after expiry"
   },
   {
     "id": "rate-limit",
     "claim": "Each client may make exactly 40 room API requests per second; later requests return 429 with Retry-After.",
-    "where": "README",
+    "where": "privacy, README",
     "test": "RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit",
     "sandbox": "five distinct fresh forwarded client identities; each sends a 45-request live burst and observes exactly 40 successes, then five 429 responses with Retry-After: 1"
   },
@@ -106,9 +106,9 @@
   },
   {
     "id": "singleton-deployment",
-    "claim": "The live relay runs as exactly one Container App replica because room state is process-local.",
+    "claim": "The live relay uses durable SQLite under /data and exactly one Container App replica for WebSocket delivery.",
     "where": "README deployment and privacy sections",
     "test": "npm run test:live-topology",
-    "sandbox": "read-only Azure queries; assert one active revision, min/max one, HTTP ingress, one running replica, and live health identity matching HEAD"
+    "sandbox": "read-only Azure queries; assert the /data volume, one active revision, min/max one, HTTP ingress, one ready replica, full-SHA image, and matching live health identity"
   }
 ]

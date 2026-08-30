@@ -11,6 +11,7 @@ const fakeBin = join(tempDirectory, 'bin');
 const commandLog = join(tempDirectory, 'commands.log');
 const npmLog = join(tempDirectory, 'npm.log');
 const npmState = join(tempDirectory, 'npm-state');
+const renderedConfig = join(tempDirectory, 'rendered-app.json');
 const revision = '0123456789abcdef0123456789abcdef01234567';
 
 try {
@@ -24,16 +25,28 @@ try {
 set -eu
 printf '%s\\n' "$*" >> "$RELAY_DEPLOY_COMMAND_LOG"
 case "$*" in
+  *"containerapp update"*"--yaml"*)
+    previous=""
+    for argument in "$@"; do
+      if [ "$previous" = "--yaml" ]; then cp "$argument" "$RELAY_DEPLOY_RENDERED_CONFIG"; fi
+      previous="$argument"
+    done
+    ;;
   *"containerapp show"*"activeRevisionsMode"*) printf 'Single\\n' ;;
   *"containerapp show"*"scale.minReplicas"*) printf '1\\n' ;;
   *"containerapp show"*"scale.maxReplicas"*) printf '%s\\n' "\${RELAY_FAKE_MAX_REPLICAS:-1}" ;;
   *"containerapp show"*"ingress.transport"*) printf '%s\\n' "\${RELAY_FAKE_TRANSPORT:-Http}" ;;
+  *"containerapp show"*"template.volumes"*) printf '1\\n' ;;
+  *"containerapp show"*"volumeMounts"*) printf '1\\n' ;;
+  *"containerapp show"*"--output json"*) printf '%s\\n' '{"name":"sf-haptic-beat-relay","location":"eastus","type":"Microsoft.App/containerApps","properties":{"environmentId":"/subscriptions/test/resourceGroups/sociobot/providers/Microsoft.App/managedEnvironments/test","configuration":{},"template":{"containers":[{"name":"app","image":"old","env":[{"name":"PORT","value":"8080"}],"resources":{"cpu":0.5,"memory":"1Gi"}}],"scale":{"minReplicas":1,"maxReplicas":3}}}}' ;;
   *"revision list"*"length([?properties.active])"*) printf '1\\n' ;;
   *"revision list"*"trafficWeight"*) printf 'sf-haptic-beat-relay--r0123456789\\n' ;;
   *"ready"*) printf '%s\\n' "\${RELAY_FAKE_READY_REPLICAS:-1}" ;;
   *"replica list"*) printf '%s\\n' "\${RELAY_FAKE_RUNNING_REPLICAS:-1}" ;;
   *"revision show"*"scale.minReplicas"*) printf '1\\n' ;;
   *"revision show"*"scale.maxReplicas"*) printf '%s\\n' "\${RELAY_FAKE_MAX_REPLICAS:-1}" ;;
+  *"revision show"*"template.volumes"*) printf '1\\n' ;;
+  *"revision show"*"volumeMounts"*) printf '1\\n' ;;
 esac
 `, 'utf8');
   writeFileSync(fakeGit, `#!/usr/bin/env sh
@@ -76,6 +89,7 @@ fi
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
       RELAY_DEPLOY_NPM_STATE: npmState,
+      RELAY_DEPLOY_RENDERED_CONFIG: renderedConfig,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
       RELAY_DEPLOY_STABILITY_SECONDS: '0',
       RELAY_ROUNDS: '1',
@@ -86,7 +100,7 @@ fi
 
   const commands = readFileSync(commandLog, 'utf8').trim().split('\n');
   const find = (fragment) => commands.findIndex((command) => command.includes(fragment));
-  const rollout = find(`containerapp update --resource-group sociobot --name sf-haptic-beat-relay --image sociobotregistry.azurecr.io/sf-haptic-beat-relay:${revision}`);
+  const rollout = find('containerapp update --resource-group sociobot --name sf-haptic-beat-relay --yaml');
   const ingress = find('containerapp ingress update --resource-group sociobot --name sf-haptic-beat-relay --transport http');
   const singleRevisionMode = find('containerapp revision set-mode --resource-group sociobot --name sf-haptic-beat-relay --mode single');
 
@@ -94,11 +108,14 @@ fi
   assert.ok(singleRevisionMode >= 0, 'the deployment must enforce single revision mode');
   assert.ok(rollout > singleRevisionMode, 'the image rollout must occur after single revision mode is set');
   assert.ok(ingress > rollout, 'HTTP ingress must be applied after the rollout because Azure can reset it to Auto');
-  assert.ok(commands[rollout].includes('--min-replicas 1 --max-replicas 1'), 'the new revision must be pinned to exactly one replica');
-  assert.ok(
-    commands[rollout].includes('--revision-suffix r0123456789'),
-    'the new revision must carry the guarded SHA-derived suffix, not the generic deployment suffix',
-  );
+  const rendered = JSON.parse(readFileSync(renderedConfig, 'utf8'));
+  const template = rendered.properties.template;
+  assert.equal(template.scale.minReplicas, 1, 'the rendered revision must have one minimum replica');
+  assert.equal(template.scale.maxReplicas, 1, 'the rendered revision must have one maximum replica');
+  assert.equal(template.revisionSuffix, 'r0123456789', 'the rendered revision must carry the guarded SHA-derived suffix');
+  assert.equal(template.containers[0].image, `sociobotregistry.azurecr.io/sf-haptic-beat-relay:${revision}`);
+  assert.deepEqual(template.containers[0].volumeMounts, [{ volumeName: 'sf-haptic-beat-relay-data', mountPath: '/data' }]);
+  assert.deepEqual(template.volumes, [{ name: 'sf-haptic-beat-relay-data', storageName: 'sf-haptic-beat-relay-data', storageType: 'AzureFile' }]);
   assert.ok(
     commands.some((command) => command.includes("properties.containers[0].ready == `true`")),
     'the deployment must wait for exactly one running application container to become ready',
@@ -133,6 +150,7 @@ fi
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: lateNpmLog,
       RELAY_DEPLOY_NPM_STATE: lateNpmState,
+      RELAY_DEPLOY_RENDERED_CONFIG: renderedConfig,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
       RELAY_DEPLOY_STABILITY_SECONDS: '0',
       RELAY_FAKE_LATE_REPLACEMENT: '1',
@@ -166,6 +184,7 @@ fi
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
       RELAY_DEPLOY_NPM_STATE: npmState,
+      RELAY_DEPLOY_RENDERED_CONFIG: renderedConfig,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
       RELAY_DEPLOY_STABILITY_SECONDS: '0',
       RELAY_FAKE_TRANSPORT: 'Auto',
@@ -177,7 +196,7 @@ fi
   assert.equal(drift.status, 1, 'the verifier topology must block deployment');
   assert.match(
     drift.stderr,
-    /min=1 max=3 transport=auto[\s\S]*active_min=1 active_max=3 running_replicas=3 ready_replicas=3/,
+    /min=1 max=3 transport=auto[\s\S]*active_min=1 active_max=3[\s\S]*running_replicas=3 ready_replicas=3/,
     'the rejected deployment must report the exact ingress, scale, active-revision, running, and ready replica drift',
   );
   assert.equal(
@@ -195,6 +214,7 @@ fi
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
       RELAY_DEPLOY_NPM_STATE: npmState,
+      RELAY_DEPLOY_RENDERED_CONFIG: renderedConfig,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
       RELAY_DEPLOY_STABILITY_SECONDS: '0',
       RELAY_FAKE_READY_REPLICAS: '0',
@@ -234,6 +254,7 @@ fi
         RELAY_DEPLOY_COMMAND_LOG: commandLog,
         RELAY_DEPLOY_NPM_LOG: npmLog,
         RELAY_DEPLOY_NPM_STATE: npmState,
+        RELAY_DEPLOY_RENDERED_CONFIG: renderedConfig,
         RELAY_DEPLOY_EXPECTED_REVISION: revision,
         RELAY_DEPLOY_STABILITY_SECONDS: '0',
         ...releaseState.env,
@@ -258,6 +279,7 @@ fi
       RELAY_DEPLOY_COMMAND_LOG: commandLog,
       RELAY_DEPLOY_NPM_LOG: npmLog,
       RELAY_DEPLOY_NPM_STATE: npmState,
+      RELAY_DEPLOY_RENDERED_CONFIG: renderedConfig,
       RELAY_DEPLOY_EXPECTED_REVISION: revision,
       RELAY_DEPLOY_STABILITY_SECONDS: '0',
     },

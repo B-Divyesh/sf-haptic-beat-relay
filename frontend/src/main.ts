@@ -142,7 +142,7 @@ function landingPage(): string {
         <div class="prose">
           <p>Phone vibration and controller vibration vary by browser and device.</p>
           <p>The screen still flashes each cue when vibration is unavailable.</p>
-          <p>Rooms hold only live relay messages. Closing the server clears every room.</p>
+          <p>Rooms hold only live relay messages. Room records expire automatically after two hours.</p>
         </div>
       </section>
     </main>${footer()}`;
@@ -249,7 +249,8 @@ function legalPage(kind: 'privacy' | 'terms'): string {
     <h1 tabindex="-1">${privacy ? 'How temporary rooms handle your data' : 'Terms for using Haptic Beat Relay'}</h1>
     ${privacy ? `<h2>What the relay handles</h2>
       <p>The server holds a room code, two random access tokens, and live timing messages.</p>
-      <p>Room state stays in server memory for up to two hours. A server restart clears it sooner.</p>
+      <p>SQLite stores room records for up to two hours. Active rooms survive a server restart.</p>
+      <p>The server keeps a client network address briefly to enforce request limits.</p>
       <p>Your audio loop stays inside the host browser. The relay never receives the file.</p>
       <h2>What we do not collect</h2>
       <p>There are no accounts, advertising trackers, or analytics scripts.</p>

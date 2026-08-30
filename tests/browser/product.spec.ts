@@ -47,6 +47,16 @@ test('regression: the audience and sample action fit in the first viewport', asy
     const factsBox = await facts.boundingBox();
     expect(factsBox).not.toBeNull();
     expect(factsBox!.y + factsBox!.height).toBeLessThanOrEqual(viewport!.height);
+    const splitWords = await page.locator('#hero-title').evaluate((heading) => {
+      const text = heading.firstChild?.textContent ?? '';
+      return [...text.matchAll(/\S+/g)].filter((match) => {
+        const range = document.createRange();
+        range.setStart(heading.firstChild!, match.index!);
+        range.setEnd(heading.firstChild!, match.index! + match[0].length);
+        return range.getClientRects().length > 1;
+      }).map((match) => match[0]);
+    });
+    expect(splitWords, 'hero words must not break across lines at 390px').toEqual([]);
   }
 });
 
@@ -118,7 +128,7 @@ test('@claim:local-audio and @claim:no-third-party uploaded audio stays in the h
   expect(requests.every((request) => new URL(request.url).origin === 'http://127.0.0.1:8080')).toBe(true);
 });
 
-test('room creation reports its memory lifetime', async ({ request }) => {
+test('room creation reports its two-hour expiry', async ({ request }) => {
   const response = await request.post('/api/rooms', { headers: { 'X-Forwarded-For': '203.0.113.33' } });
   expect(response.ok()).toBe(true);
   const room = await response.json() as { code: string; expires_in_seconds: number };
@@ -141,6 +151,25 @@ test('@claim:health health endpoint returns the build identity', async ({ reques
   const response = await request.get('/health');
   expect(response.ok()).toBe(true);
   expect(await response.json()).toMatchObject({ status: 'ok', build_sha: expect.any(String) });
+});
+
+test('response policy protects HTML, API errors, and immutable assets', async ({ request }) => {
+  const html = await request.get('/');
+  expect(html.status()).toBe(200);
+  expect(html.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
+  expect(html.headers()['x-content-type-options']).toBe('nosniff');
+  expect(html.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');
+  expect(html.headers()['cache-control']).toBe('no-cache');
+
+  const assetPath = (await html.text()).match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
+  expect(assetPath).toBeTruthy();
+  const asset = await request.get(assetPath!);
+  expect(asset.status()).toBe(200);
+  expect(asset.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
+
+  const invalid = await request.post('/api/rooms/A2/join');
+  expect(invalid.status()).toBe(400);
+  expect(invalid.headers()['content-security-policy']).toContain("default-src 'self'");
 });
 
 test('@claim:connection-required the real relay explains an offline failure', async ({ page, context }) => {
@@ -285,10 +314,12 @@ test('@claim:real-round-duration a real round completes after 60 seconds', async
   await companionContext.close();
 });
 
-test('regression: repeated independent host and companion connections always create, join, and complete a round', async ({ browser }) => {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const hostContext = await browser.newContext();
-    const companionContext = await browser.newContext();
+test('regression: 30 fresh desktop-host and 390px companion rounds remain connected', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'One 30-round run covers both explicit viewport sizes.');
+  test.setTimeout(120_000);
+  for (let attempt = 1; attempt <= 30; attempt += 1) {
+    const hostContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const companionContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
     const host = await hostContext.newPage();
     const companion = await companionContext.newPage();
 
@@ -307,6 +338,7 @@ test('regression: repeated independent host and companion connections always cre
 
     await hostContext.close();
     await companionContext.close();
+    await new Promise((resolve) => setTimeout(resolve, 550));
   }
 });
 
