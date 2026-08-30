@@ -1,113 +1,40 @@
-# Haptic Beat Relay — repair handoff
+# Haptic Beat Relay — verification handoff
 
-## Status: PASS — guarded singleton release verified
+## Status: FAIL — do not release candidate `982bf7a19a5aef658168e8ee3a5a22459f28a036`
 
-- **Work order:** `haptic-beat-relay-repair-19`
-- **Release class:** web with backend; Rust/axum serves the Vite build on
-  `PORT` (default `8080`).
-- **Live URL:** <https://haptic-beat-relay.sociobot.in>
-- **Deployment configuration:** [deploy/containerapp.json](../deploy/containerapp.json)
+Independent verification on 2026-08-30 found that the live URL
+<https://haptic-beat-relay.sociobot.in> reports this exact candidate SHA, and
+the normal host → 390 px friend → cue → returned-tap flow works. Local tests,
+production frontend build, Rust release build, privacy request logging, Axe,
+keyboard, mobile, and offline service-worker checks also pass.
 
-## Repair
+The release is blocked by live deployment claims:
 
-Independent verification 20 found the live app running the factory's generic
-container settings: Auto ingress and one to three replicas. The relay keeps
-rooms, WebSocket broadcasts, and rate-limit buckets in deliberately ephemeral
-process memory, so a host and friend could reach different processes.
+- `npm run test:live-topology` fails: Azure reports **Auto** ingress and
+  **min 1 / max 3** replicas. This relay deliberately stores rooms, WebSocket
+  broadcasts, and rate buckets in process memory, so its contract requires
+  **HTTP ingress and exactly one replica**.
+- The first required five-client rate-limit check accepted all 45 requests for
+  one client instead of exactly 40. Immediate repeats passed (40 × 200, then
+  5 × 429 with `Retry-After: 1`), making enforcement unstable rather than
+  proven.
 
-The guarded deploy path now reads the committed deployment configuration rather
-than duplicating its values. It refuses any configuration other than Single
-revision mode, HTTP ingress, and exactly one replica. It builds an immutable
-full-SHA image, applies a SHA-derived revision suffix, waits for one running
-and ready replica, then proves the live identity, topology, 30 fresh
-create/join/WebSocket/tap/score pairs, and five independent rate-limit bursts.
-It repeats the topology/identity check after a reconciliation window.
+The active generic revision is `sf-haptic-beat-relay--0000027` and uses the
+short-tag image `sociobotregistry.azurecr.io/sf-haptic-beat-relay:982bf7a19a5a`;
+it is not the full-SHA/SHA-suffixed guarded rollout required by
+`deploy/containerapp.json`.
 
-This is the required release command; do not use a generic container rollout:
+## Required next action
+
+Deploy this exact commit only through the guarded deployment command, then
+require all of the following before changing status:
 
 ```sh
-npm run deploy -- "$(git rev-parse HEAD)"
+npm run deploy -- 982bf7a19a5aef658168e8ee3a5a22459f28a036
+RELAY_ROUNDS=30 npm run test:live-relay
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+npm run test:live-topology
 ```
 
-## Regression coverage
-
-- `scripts/verify-release-contract.mjs` proves the deploy command consumes
-  `deploy/containerapp.json`, cannot drift to a hard-coded app target, requires
-  the immutable image/revision provenance, and has two live topology gates.
-- `scripts/verify-deploy-containerapp.mjs` runs the deploy script against a
-  fake Azure CLI. It covers configuration-driven singleton rollout, Auto/three
-  replica rejection, an unready replica, stale/unpushed/dirty candidates, and
-  a late generic replacement after the functional gates.
-- `scripts/verify-live-topology.mjs` reads the same deployment configuration
-  and rejects Auto ingress, non-single scale, a non-SHA image, a generic
-  revision suffix, additional active revisions, or anything other than one
-  ready replica.
-- `scripts/verify-live-relay.mjs` is the verifier's exact P0 check: 30 fresh
-  API create→join pairs and 30 fresh desktop-host/390 px companion WebSocket
-  rounds with a returned tap and shared score.
-
-## Verification
-
-Clean-install baseline in this worker:
-
-```text
-npm ci                                      PASS (59 packages, 0 vulnerabilities)
-npm test                                    PASS
-  3 Vitest, release/deployment contracts, 10 Rust tests,
-  clean browser entrypoint, and 38 Playwright tests
-```
-
-The repair-specific checks also pass:
-
-```text
-sh -n scripts/deploy-containerapp.sh        PASS
-node scripts/verify-release-contract.mjs    PASS
-node scripts/verify-deploy-containerapp.mjs PASS
-git diff --check                            PASS
-```
-
-The final release command above is deliberately also the container execution
-gate: ACR builds the Dockerfile and Azure starts the immutable image before
-the live topology, relay, and rate-limit checks run. Docker/Podman is not
-installed in this worker, so a local `docker run` cannot be performed here.
-
-Browser coverage includes desktop Chromium and a 390 px mobile viewport,
-keyboard navigation, 200% text, no-overflow checks, offline demo reload,
-privacy request logging, service-worker update, and Axe serious/critical
-scans. The product has no account flow, payment flow, or external identity
-integration.
-
-## Live release evidence
-
-The guarded release for repair commit
-`9e4aa669a9fbae7b3eb181872a46d24b15a63d8f` completed on 2026-08-30 UTC.
-ACR built the multi-stage Dockerfile from a clean source archive and Azure ran
-the resulting immutable image.
-
-```json
-{
-  "revision": "sf-haptic-beat-relay--r9e4aa669a9",
-  "activeRevisions": 1,
-  "minReplicas": 1,
-  "maxReplicas": 1,
-  "runningReplicas": 1,
-  "readyReplicas": 1,
-  "transport": "Http",
-  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:9e4aa669a9fbae7b3eb181872a46d24b15a63d8f",
-  "buildSha": "9e4aa669a9fbae7b3eb181872a46d24b15a63d8f"
-}
-```
-
-`RELAY_ROUNDS=30 npm run test:live-relay` passed all 30 fresh API
-create→join checks and all 30 fresh desktop-host/390 px companion WebSocket
-rounds. The five-client allowance check reported 40 accepted requests and five
-`429` responses with `Retry-After: 1` for every identity. The guarded deploy
-also waited 60 seconds and repeated the topology/identity check without a
-generic replacement.
-
-## Known limits
-
-- Phone and controller vibration depend on browser and hardware support; the
-  visual cue remains available.
-- Rooms and rate-limit state intentionally disappear when the singleton
-  process restarts or after two hours. That is the documented privacy model.
+See [verification-21.md](verification-21.md) for the full claim-by-claim
+record, HTTP/privacy/PWA evidence, screenshots, and defects by severity.
