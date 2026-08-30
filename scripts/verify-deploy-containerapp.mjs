@@ -39,6 +39,7 @@ case "$*" in
   *"containerapp show"*"template.volumes"*) printf '1\\n' ;;
   *"containerapp show"*"volumeMounts"*) printf '1\\n' ;;
   *"containerapp show"*"--output json"*) printf '%s\\n' '{"name":"sf-haptic-beat-relay","location":"eastus","type":"Microsoft.App/containerApps","properties":{"environmentId":"/subscriptions/test/resourceGroups/sociobot/providers/Microsoft.App/managedEnvironments/test","configuration":{},"template":{"containers":[{"name":"app","image":"old","env":[{"name":"PORT","value":"8080"}],"resources":{"cpu":0.5,"memory":"1Gi"},"volumeMounts":[{"volumeName":"data","mountPath":"/data"}]}],"volumes":[{"name":"data","storageName":"sf-haptic-beat-relay-data","storageType":"AzureFile"}],"scale":{"minReplicas":1,"maxReplicas":3}}}}' ;;
+  *"revision list"*"[?properties.active].name"*) printf 'sf-haptic-beat-relay--old\\n' ;;
   *"revision list"*"length([?properties.active])"*) printf '1\\n' ;;
   *"revision list"*"trafficWeight"*) printf 'sf-haptic-beat-relay--r0123456789\\n' ;;
   *"ready"*) printf '%s\\n' "\${RELAY_FAKE_READY_REPLICAS:-1}" ;;
@@ -103,9 +104,12 @@ fi
   const rollout = find('containerapp update --resource-group sociobot --name sf-haptic-beat-relay --yaml');
   const ingress = find('containerapp ingress update --resource-group sociobot --name sf-haptic-beat-relay --transport http');
   const singleRevisionMode = find('containerapp revision set-mode --resource-group sociobot --name sf-haptic-beat-relay --mode single');
+  const stoppedPreviousRevision = find('containerapp revision deactivate --resource-group sociobot --name sf-haptic-beat-relay --revision sf-haptic-beat-relay--old');
 
   assert.ok(find(`acr build --registry sociobotregistry --image sf-haptic-beat-relay:${revision} --build-arg BUILD_SHA=${revision} .`) >= 0, 'the image build must receive the exact release identity');
   assert.ok(singleRevisionMode >= 0, 'the deployment must enforce single revision mode');
+  assert.ok(stoppedPreviousRevision > singleRevisionMode, 'the retiring SQLite writer must stop after singleton mode is set');
+  assert.ok(rollout > stoppedPreviousRevision, 'the incoming SQLite writer must start only after the retiring revision stops');
   assert.ok(rollout > singleRevisionMode, 'the image rollout must occur after single revision mode is set');
   assert.ok(ingress > rollout, 'HTTP ingress must be applied after the rollout because Azure can reset it to Auto');
   const rendered = JSON.parse(readFileSync(renderedConfig, 'utf8'));
@@ -128,6 +132,7 @@ fi
     readFileSync(npmLog, 'utf8').trim().split('\n'),
     [
       `${revision}|1||run test:live-topology`,
+      `${revision}|1||run test:live-persistence`,
       `|1||run test:live-relay`,
       `|1|5|run test:live-rate-limit`,
       `${revision}|1||run test:live-topology`,
@@ -163,6 +168,7 @@ fi
     readFileSync(lateNpmLog, 'utf8').trim().split('\n'),
     [
       `${revision}|1||run test:live-topology`,
+      `${revision}|1||run test:live-persistence`,
       `|1||run test:live-relay`,
       `|1|5|run test:live-rate-limit`,
       `${revision}|1||run test:live-topology`,

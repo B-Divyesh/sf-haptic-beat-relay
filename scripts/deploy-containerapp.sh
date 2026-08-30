@@ -124,6 +124,23 @@ az containerapp revision set-mode \
   --name "$container_app" \
   --mode single
 
+# Azure Files does not implement the POSIX advisory locks SQLite expects. The
+# application therefore uses SQLite's unix-none VFS only for /data. Stop the
+# previous app-specific revision before starting its successor so exactly one
+# process can ever touch that durable database. This deliberately trades a
+# brief deployment gap for database integrity.
+active_before="$(az containerapp revision list \
+  --resource-group "$resource_group" \
+  --name "$container_app" \
+  --query '[?properties.active].name' \
+  --output tsv)"
+for revision_to_stop in $active_before; do
+  az containerapp revision deactivate \
+    --resource-group "$resource_group" \
+    --name "$container_app" \
+    --revision "$revision_to_stop"
+done
+
 deployment_temp="$(mktemp -d)"
 trap 'rm -rf "$deployment_temp"' EXIT HUP INT TERM
 current_app="$deployment_temp/current-app.json"
@@ -206,6 +223,7 @@ echo "Relay deployment contract verified: revision=$active_revision, one active,
 # independently routed HTTP create/join calls and WebSocket upgrades actually
 # share that one process before this deployment is accepted.
 RELAY_EXPECTED_SHA="$revision" npm run test:live-topology
+RELAY_EXPECTED_SHA="$revision" npm run test:live-persistence
 RELAY_ROUNDS="${RELAY_ROUNDS:-30}" npm run test:live-relay
 RELAY_RATE_REPETITIONS="${RELAY_RATE_REPETITIONS:-5}" npm run test:live-rate-limit
 

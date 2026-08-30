@@ -29,7 +29,9 @@ backend runs in another terminal.
 
 The container stores SQLite at `/data/relay.sqlite3`. A local run
 uses `/data` when present, then falls back beside the executable. Set
-`RELAY_DATABASE_PATH` only when a different local test path is needed.
+`RELAY_DATABASE_PATH` only when a different local test path is needed. The
+release command stops the previous singleton revision before starting the next
+one because the Azure Files database uses SQLite's no-lock Unix VFS.
 
 ## Test
 

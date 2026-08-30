@@ -35,7 +35,10 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
   after two hours. Stale companion leases are released at startup.
 - Configured SQLite with a full-synchronous rollback journal and a 30-second
   busy timeout. WAL shared-memory files are unsafe on the Azure Files SMB
-  mount, and the timeout lets an incoming revision wait for a retiring one.
+  mount. Because the mount also rejects SQLite's advisory locks, `/data` uses
+  the `unix-none` VFS with one connection, and deployment stops every old
+  revision before starting its successor. That three-part invariant prevents
+  concurrent writers.
   The repaired store uses a clean `relay.sqlite3`; the unusable WAL database
   created by the blocked first rollout never served traffic and is ignored.
 - Made the exact 40-request window one atomic SQLite upsert. Request arrival
@@ -44,7 +47,8 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
 - Kept WebSocket fan-out deliberately singleton and strengthened the guarded
   deployment. It now renders the Azure Files mount, full-SHA image,
   SHA-derived revision suffix, one-replica scale, and HTTP ingress. It also
-  removes the factory helper's legacy alias for the same mounted volume.
+  removes the factory helper's legacy alias for the same mounted volume and
+  enforces stop-before-start for the single SQLite writer.
 - Extended live topology checks to require the `/data` volume on both the app
   template and active revision.
 - Added regressions for shared room access across pools, shared rate limits
@@ -59,11 +63,12 @@ identity, 30-round relay, and five independent rate-limit bursts all pass.
 ## Verification evidence
 
 - Clean install: `npm ci` — 59 packages, 0 vulnerabilities.
-- Full gate: `npm test` — 3 Vitest tests, 13 Rust tests, release/deployment/
+- Full gate: `npm test` — 3 Vitest tests, 14 Rust tests, release/deployment/
   handoff contracts, 2 clean-entrypoint checks, then 37 Playwright checks
   passed with 3 intentional project skips.
 - The Azure Files regression holds an exclusive rollback-journal lock, proves
-  incoming startup waits for its release, and asserts `journal_mode=delete`.
+  incoming startup waits for its release, asserts `journal_mode=delete`, and
+  exercises the release SQLite build through the `unix-none` VFS.
 - Formatting and lint: `cargo fmt --check` and
   `cargo clippy --all-targets --all-features -- -D warnings` passed.
 - Production builds: `npm run build` and `cargo build --release --locked`
@@ -96,13 +101,15 @@ The final handoff commit is deployed only with:
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-persistence
 RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 ```
 
 The deploy command itself repeats topology after a reconciliation window. It
 fails unless the active full-SHA revision has HTTP ingress, one ready replica,
-the configured `/data` mount, 30 stable rounds, and five exact 40/5 bursts.
+the configured `/data` mount, a room survives a live replica restart, 30
+stable rounds, and five exact 40/5 bursts.
 
 ## Known gaps
 

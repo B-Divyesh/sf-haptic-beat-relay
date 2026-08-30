@@ -15,6 +15,7 @@
     "test:browser": "npm run build && playwright test",
     "test:clean-entrypoint": "node scripts/verify-clean-browser-entrypoint.mjs",
     "test:live-relay": "node scripts/verify-live-relay.mjs",
+    "test:live-persistence": "node scripts/verify-live-persistence.mjs",
     "test:live-rate-limit": "node scripts/verify-live-rate-limit.mjs",
     "test:live-topology": "node scripts/verify-live-topology.mjs",
     "test": "npm run test:unit && npm run test:release-contract && npm run test:deployment-contract && npm run test:handoff-contract && cargo test && npm run test:clean-entrypoint && playwright test"

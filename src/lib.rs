@@ -44,6 +44,7 @@ const ROOM_TTL: Duration = Duration::from_secs(2 * 60 * 60);
 const RATE_WINDOW: Duration = Duration::from_secs(1);
 const RATE_RETENTION: Duration = Duration::from_secs(60);
 const RATE_BURST: u32 = 40;
+const DURABLE_SQLITE_VFS: &str = "unix-none";
 static MIGRATOR: Migrator = sqlx::migrate!();
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -100,15 +101,10 @@ pub async fn app(dist_dir: impl Into<String>) -> Result<Router, BoxError> {
     app_with_database_path(dist_dir, database_path(), ROOM_TTL).await
 }
 
-async fn app_with_database_path(
-    dist_dir: impl Into<String>,
-    database_path: impl AsRef<FilePath>,
-    room_ttl: Duration,
-) -> Result<Router, BoxError> {
-    let database_path = database_path.as_ref();
-    if let Some(parent) = database_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+fn sqlite_connect_options(
+    database_path: &FilePath,
+    durable_network_mount: bool,
+) -> SqliteConnectOptions {
     let options = SqliteConnectOptions::new()
         .filename(database_path)
         .create_if_missing(true)
@@ -120,6 +116,28 @@ async fn app_with_database_path(
         // A retiring revision can hold the database briefly while Azure moves
         // traffic. Wait for that lock instead of crash-looping the new one.
         .busy_timeout(Duration::from_secs(30));
+
+    if durable_network_mount {
+        // Azure Files does not provide the POSIX advisory-lock behavior SQLite
+        // expects. `unix-none` is safe only because this process uses one pool
+        // connection and the deployment stops every old revision before a new
+        // one starts. Keep that rollout invariant in deploy-containerapp.sh.
+        options.vfs(DURABLE_SQLITE_VFS)
+    } else {
+        options
+    }
+}
+
+async fn app_with_database_path(
+    dist_dir: impl Into<String>,
+    database_path: impl AsRef<FilePath>,
+    room_ttl: Duration,
+) -> Result<Router, BoxError> {
+    let database_path = database_path.as_ref();
+    if let Some(parent) = database_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let options = sqlite_connect_options(database_path, database_path.starts_with("/data"));
     let database = SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
@@ -815,6 +833,35 @@ mod tests {
             "another process using the same database must accept the room's host token"
         );
         other_server.abort();
+    }
+
+    #[tokio::test]
+    async fn regression_azure_files_vfs_can_create_and_update_the_durable_schema() {
+        assert_eq!(DURABLE_SQLITE_VFS, "unix-none");
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        let database = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(sqlite_connect_options(&database_path, true))
+            .await
+            .expect("the no-lock Unix VFS must be available in the release SQLite build");
+        MIGRATOR.run(&database).await.unwrap();
+        sqlx::query(
+            "INSERT INTO rate_limits (client, window_started_ms, request_count) VALUES (?, ?, ?)",
+        )
+        .bind("198.51.100.200")
+        .bind(1_i64)
+        .bind(1_i64)
+        .execute(&database)
+        .await
+        .unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT request_count FROM rate_limits WHERE client = ?")
+                .bind("198.51.100.200")
+                .fetch_one(&database)
+                .await
+                .unwrap();
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
