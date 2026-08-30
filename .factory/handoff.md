@@ -1,6 +1,6 @@
 # Haptic Beat Relay — repair handoff
 
-## Status: ready for the guarded container release
+## Status: PASS — guarded singleton release verified
 
 - **Work order:** `haptic-beat-relay-repair-19`
 - **Release class:** web with backend; Rust/axum serves the Vite build on
@@ -76,6 +76,34 @@ keyboard navigation, 200% text, no-overflow checks, offline demo reload,
 privacy request logging, service-worker update, and Axe serious/critical
 scans. The product has no account flow, payment flow, or external identity
 integration.
+
+## Live release evidence
+
+The guarded release for repair commit
+`9e4aa669a9fbae7b3eb181872a46d24b15a63d8f` completed on 2026-08-30 UTC.
+ACR built the multi-stage Dockerfile from a clean source archive and Azure ran
+the resulting immutable image.
+
+```json
+{
+  "revision": "sf-haptic-beat-relay--r9e4aa669a9",
+  "activeRevisions": 1,
+  "minReplicas": 1,
+  "maxReplicas": 1,
+  "runningReplicas": 1,
+  "readyReplicas": 1,
+  "transport": "Http",
+  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:9e4aa669a9fbae7b3eb181872a46d24b15a63d8f",
+  "buildSha": "9e4aa669a9fbae7b3eb181872a46d24b15a63d8f"
+}
+```
+
+`RELAY_ROUNDS=30 npm run test:live-relay` passed all 30 fresh API
+create→join checks and all 30 fresh desktop-host/390 px companion WebSocket
+rounds. The five-client allowance check reported 40 accepted requests and five
+`429` responses with `Retry-After: 1` for every identity. The guarded deploy
+also waited 60 seconds and repeated the topology/identity check without a
+generic replacement.
 
 ## Known limits
 
