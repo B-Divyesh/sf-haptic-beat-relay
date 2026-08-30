@@ -1,74 +1,52 @@
-# Haptic Beat Relay — polish 1 handoff
+# Haptic Beat Relay — independent verification handoff
 
-## Status: verified and released
+## Status: FAIL — release blocked
 
-- **Work order:** `haptic-beat-relay-polish-1`
-- **Repair base:** `1a9cd415c5d3f6db834b57cc1e68f6f58b93b4df`
-- **Review repaired:** [review-1.md](review-1.md)
-- **Finding map:** [polish-1.md](polish-1.md)
+- **Work order:** `haptic-beat-relay-verify-20`
+- **Candidate/source commit:** `cc3cfc785f371a2e17672d5b00833e13d4b10226`
 - **Live URL:** <https://haptic-beat-relay.sociobot.in>
-- **Date:** 2026-08-29 UTC
+- **Verified:** 2026-08-30 UTC
+- **Verifier change only:** this handoff and [verification-20.md](verification-20.md); no product code was changed.
 
-## Delivered repair
+The live `/health` response identifies the candidate SHA, so this is not a stale deployment. It is nevertheless a failed release: the claimed 30-round live relay check times out while a fresh companion waits to connect. Azure shows three ready replicas (`maxReplicas: 3`, ingress `Auto`) even though room, WebSocket broadcast, and limiter state are process-local. A host and a companion can consequently be routed to different processes.
 
-- Added direct isolated sample entry at `?demo=1`, with its persistent banner,
-  reset control, and explicit **Create a real room** exit.
-- Redesigned the phone demo so the live paired round, seeded returned taps,
-  shared score, and start action fit in the 390 × 844 first viewport.
-- Rewrote the landing, legal headings, docs, and terminology in plain words.
-- Removed every unlisted or unproved README promise; retained public claims in
-  [claims.json](claims.json), each with exactly one tagged observable test.
-- Added route-specific metadata updates and test coverage for title,
-  description, canonical, Open Graph, and Twitter values.
-- Updated the catalog sentence, demo guide, copy audit, screenshots, and
-  review-to-repair mapping without changing the midnight rehearsal visual system.
+## Release blockers
 
-## Local evidence
+### P0 — live paired relay is not reliable
 
-| Check | Result |
-|---|---|
-| Clean dependency install | `npm ci` passed; 59 packages, 0 vulnerabilities. |
-| Full quality suite | `npm test` passed: 3 Vitest tests, release and deployment contracts, 10 Rust tests, clean-entry check, and 38 Playwright tests (2 expected project skips). |
-| Production build | `npm run build` passed. JS: 24.30 kB raw / 8.17 kB gzip. CSS: 17.42 kB raw / 4.56 kB gzip. |
-| Focused route/mobile suite | 5 passed, 1 expected desktop-only skip: metadata, one-h1, 200% text, overflow, 44 px controls, and both first-viewports. |
-| Local URL smoke | `verify-url.sh http://127.0.0.1:8080` passed: title, `lang=en`, one h1/main, image alt, button names, and no console errors. |
-| Local mobile evidence | [landing-mobile.png](evidence/polish-1/landing-mobile.png) and [demo-mobile.png](evidence/polish-1/demo-mobile.png) show the 390 × 844 first screens. |
+`RELAY_ROUNDS=30 npm run test:live-relay` failed on 2026-08-30 with `page.waitForFunction: Timeout 10000ms exceeded` at `scripts/verify-live-relay.mjs:72`, while waiting for the companion to report `Connected to room <code>`. This is the core job-to-be-done (host creates a room; friend joins, receives a cue, taps back, and sees the shared score), so a release cannot proceed.
 
-## Deployment and live recheck
+### P0 — singleton deployment claim is false
 
-The guarded deployment of
-`ffabc807c1c2488efb85f79c74d089956a32dfb4` completed through ACR. The release
-script passed its initial and final topology checks around its 60-second
-stability hold, its 30 fresh relay rounds, and its five-client rate-limit gate.
-The observed live topology was:
+`npm run test:live-topology` failed immediately: expected ingress transport `http`, observed `auto`. Fresh read-only Azure evidence:
 
 ```json
 {
-  "revision": "sf-haptic-beat-relay--rffabc807c1",
-  "activeRevisions": 1,
+  "activeRevisionsMode": "Single",
+  "transport": "Auto",
   "minReplicas": 1,
-  "maxReplicas": 1,
-  "runningReplicas": 1,
-  "readyReplicas": 1,
-  "transport": "Http",
-  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:ffabc807c1c2488efb85f79c74d089956a32dfb4",
-  "buildSha": "ffabc807c1c2488efb85f79c74d089956a32dfb4"
+  "maxReplicas": 3,
+  "activeRevision": "sf-haptic-beat-relay--0000026",
+  "image": "sociobotregistry.azurecr.io/sf-haptic-beat-relay:cc3cfc785f37",
+  "runningReadyReplicas": 3
 }
 ```
 
-Cold live checks passed:
+The documented/source deployment contract requires HTTP ingress, min/max one, an immutable full-SHA image, and an `r<sha>` revision suffix. The active revision instead has a generic suffix and shortened image tag. This contradicts the `singleton-deployment` public claim and directly causes the P0 relay failure.
 
-- `verify-url.sh` returned HTTPS 200 with no console errors, `lang=en`, one
-  h1/main, usable title, image alt text, and button names.
-- Playwright Axe found zero serious or critical violations on `/`, `/?demo=1`,
-  `/privacy`, `/terms`, and `/404`.
-- [live demo screenshot](evidence/polish-1/live/demo-mobile.png) confirms the
-  390 × 844 first viewport includes the paired sample, returned taps, score,
-  and start control. [Live landing screenshot](evidence/polish-1/live/landing-mobile.png)
-  confirms all three plain facts are visible.
-- `RELAY_EXPECTED_SHA=ffabc807c1c2488efb85f79c74d089956a32dfb4 npm run
-  test:live-topology` passed after deployment.
+## What passed
 
-## Known gaps
+- `npm ci` completed from this checkout (59 packages; audit reported 0 vulnerabilities).
+- All local source checks passed: `npm test` (3 Vitest, 10 Rust, release/deployment contract, clean-entry, 38 Playwright tests with expected skips), `npm run build`, `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features --locked -- -D warnings`, and `cargo build --release`.
+- Every local/demo claim command passed. The two deployment claims above did not: `live-relay` and `singleton-deployment`.
+- First-read passed: the cold page says it sends beats to a friend, names friends and rhythm-game makers, and offers **Try it with sample data** with an explanation of what opens.
+- Live desktop and 390 px mobile had no page/console errors or horizontal overflow; Axe reported no serious/critical findings for the demo flow. The demo request log contained only same-origin document, JS, CSS, and favicon requests; no API or third-party request occurred.
+- A service worker controlled the page after reload; demo reload worked offline; `registration.update()` completed without a waiting worker or console error.
+- The live rate limit is enforced: five client identities each received exactly 40 successful room requests, then 5 `429` responses with `Retry-After: 1`.
+- `/health` returned `{"build_sha":"cc3cfc785f371a2e17672d5b00833e13d4b10226","status":"ok"}`. Invalid join code returned actionable 400; an unopened six-character code returned actionable 404.
 
-None.
+## Operational note
+
+The source contains a guarded deployment script that would require the needed singleton topology, but the deployed revision plainly was not produced by that guarded outcome (or was later replaced). Re-run the guarded deploy for the final committed release and then rerun `npm run test:live-topology` and `RELAY_ROUNDS=30 npm run test:live-relay`; do not mark a release passed until both are green.
+
+Docker is not installed in this verifier container, so an image build/run could not be executed here. The Dockerfile and source release binary build were checked; deployment state was independently inspected through Azure.
