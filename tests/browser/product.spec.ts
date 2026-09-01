@@ -330,6 +330,7 @@ test('regression: 30 delayed-score rounds reconnect both devices and agree befor
     let hostConnections = 0;
     let companionConnections = 0;
     let delayedScoreFrames = 0;
+    let replayedRoundStates = 0;
 
     await host.routeWebSocket(/\/api\/rooms\/.*\/socket/, (route) => {
       hostConnections += 1;
@@ -341,8 +342,10 @@ test('regression: 30 delayed-score rounds reconnect both devices and agree befor
       companionSocket = route;
       const server = route.connectToServer();
       server.onMessage((message) => {
-        let isScore = false;
-        try { isScore = JSON.parse(String(message)).type === 'score'; } catch { /* Forward malformed frames unchanged. */ }
+        let type = '';
+        try { type = JSON.parse(String(message)).type; } catch { /* Forward malformed frames unchanged. */ }
+        if (type === 'relay_state' && companionConnections > 1) replayedRoundStates += 1;
+        const isScore = type === 'score';
         if (!isScore) {
           route.send(message);
           return;
@@ -373,6 +376,7 @@ test('regression: 30 delayed-score rounds reconnect both devices and agree befor
     await expect.poll(() => delayedScoreFrames).toBeGreaterThan(0);
     await companionSocket!.close({ code: 1012, reason: 'regression companion reconnect during score' });
     await expect.poll(() => companionConnections).toBe(2);
+    await expect.poll(() => replayedRoundStates).toBeGreaterThan(0);
     await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
     const hostScore = await host.locator('#score-value').textContent();
     expect(hostScore, `round ${attempt} should publish a non-zero acknowledged score`).not.toBe('0%');

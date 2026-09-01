@@ -66,6 +66,16 @@ struct StoredRoom {
     expires_at_ms: i64,
 }
 
+struct StoredRelayRoundState {
+    round: i64,
+    is_active: bool,
+    bpm: Option<i64>,
+    duration_seconds: Option<i64>,
+    score: Option<i64>,
+    tap_count: i64,
+    score_acknowledged: bool,
+}
+
 #[derive(Serialize)]
 struct RoomCreated {
     code: String,
@@ -150,6 +160,9 @@ async fn app_with_database_path(
     let started_at_ms = now_millis();
     sqlx::query("DELETE FROM rooms WHERE expires_at_ms <= ?")
         .bind(started_at_ms)
+        .execute(&database)
+        .await?;
+    sqlx::query("DELETE FROM relay_round_state WHERE code NOT IN (SELECT code FROM rooms)")
         .execute(&database)
         .await?;
     // Keep companion tokens across restarts so an open browser can reconnect
@@ -481,6 +494,30 @@ async fn socket_session(
         }
         return;
     }
+    match stored_relay_round_state(&state.database, &code).await {
+        Ok(Some(round_state)) => {
+            let snapshot = relay_round_state_message(&round_state).to_string();
+            if socket_tx
+                .send(Message::Text(snapshot.into()))
+                .await
+                .is_err()
+            {
+                let role_disconnected = unregister_session(&state, &code, &role, &token).await;
+                if role == "companion" && role_disconnected {
+                    state
+                        .rejoinable_companions
+                        .lock()
+                        .await
+                        .insert((code, token));
+                }
+                return;
+            }
+        }
+        Ok(None) => {}
+        Err(error) => {
+            tracing::error!(error = %error, room = %code, "relay round state could not be restored");
+        }
+    }
     let joined = json!({ "type": "presence", "role": role, "connected": true }).to_string();
     let _ = channel.send(joined);
 
@@ -492,7 +529,13 @@ async fn socket_session(
                     Some(Ok(Message::Text(text))) if text.len() <= 2048 => {
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                             if allowed_room_message(&role, &value) {
-                                let _ = channel.send(text.to_string());
+                                match persist_relay_message(&state.database, &code, &role, &value).await {
+                                    Ok(true) => { let _ = channel.send(text.to_string()); }
+                                    Ok(false) => {}
+                                    Err(error) => {
+                                        tracing::error!(error = %error, room = %code, "relay round state could not be saved");
+                                    }
+                                }
                             }
                         }
                     }
@@ -600,6 +643,11 @@ async fn channel_for(state: &AppState, code: &str) -> broadcast::Sender<String> 
 }
 
 async fn delete_room(state: &AppState, code: &str) -> Result<(), ApiError> {
+    sqlx::query("DELETE FROM relay_round_state WHERE code = ?")
+        .bind(code)
+        .execute(&state.database)
+        .await
+        .map_err(ApiError::database)?;
     sqlx::query("DELETE FROM rooms WHERE code = ?")
         .bind(code)
         .execute(&state.database)
@@ -625,6 +673,12 @@ fn schedule_room_expiry(state: AppState, code: String, expires_at_ms: i64) {
             .await
             .map(|result| result.rows_affected() == 1)
             .unwrap_or(false);
+        if deleted {
+            let _ = sqlx::query("DELETE FROM relay_round_state WHERE code = ?")
+                .bind(&code)
+                .execute(&state.database)
+                .await;
+        }
         let channel = state.channels.lock().await.remove(&code);
         state
             .rejoinable_companions
@@ -654,11 +708,26 @@ fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
     match (role, kind) {
         ("companion", "tap") => {
             value.get("at").and_then(|item| item.as_i64()).is_some()
-                && value.get("round").and_then(|item| item.as_u64()).is_some()
+                && valid_round(value)
                 && value.get("tap_id").and_then(|item| item.as_u64()).is_some()
+                && value
+                    .get("beat_id")
+                    .and_then(|item| item.as_u64())
+                    .is_some_and(|beat_id| beat_id > 0)
+                && value
+                    .get("cue_delay")
+                    .and_then(|item| item.as_u64())
+                    .is_some_and(|delay| delay <= 10_000)
         }
         ("companion", "score_ack") => valid_score_message(value),
-        ("host", "beat") => value.get("at").and_then(|item| item.as_i64()).is_some(),
+        ("host", "beat") => {
+            value.get("at").and_then(|item| item.as_i64()).is_some()
+                && valid_round(value)
+                && value
+                    .get("beat_id")
+                    .and_then(|item| item.as_u64())
+                    .is_some_and(|beat_id| beat_id > 0)
+        }
         ("host", "round_start") => {
             value
                 .get("bpm")
@@ -668,14 +737,25 @@ fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
                     .get("duration")
                     .and_then(|item| item.as_u64())
                     .is_some_and(|seconds| (1..=3600).contains(&seconds))
+                && valid_round(value)
         }
         ("host", "score") => valid_score_message(value),
-        ("host", "round_end") => value
-            .get("score")
-            .and_then(|item| item.as_u64())
-            .is_some_and(|score| score <= 100),
+        ("host", "round_end") => {
+            value
+                .get("score")
+                .and_then(|item| item.as_u64())
+                .is_some_and(|score| score <= 100)
+                && valid_round(value)
+        }
         _ => false,
     }
+}
+
+fn valid_round(value: &serde_json::Value) -> bool {
+    value
+        .get("round")
+        .and_then(|item| item.as_u64())
+        .is_some_and(|round| round > 0)
 }
 
 fn valid_score_message(value: &serde_json::Value) -> bool {
@@ -688,6 +768,120 @@ fn valid_score_message(value: &serde_json::Value) -> bool {
             .get("tap_count")
             .and_then(|item| item.as_u64())
             .is_some()
+        && valid_round(value)
+}
+
+async fn persist_relay_message(
+    database: &SqlitePool,
+    code: &str,
+    role: &str,
+    value: &serde_json::Value,
+) -> Result<bool, sqlx::Error> {
+    let kind = value.get("type").and_then(|item| item.as_str());
+    let now = now_millis();
+    match (role, kind) {
+        ("host", Some("round_start")) => {
+            let round = value["round"].as_i64().expect("validated round");
+            let bpm = value["bpm"].as_i64().expect("validated bpm");
+            let duration = value["duration"].as_i64().expect("validated duration");
+            sqlx::query(
+                "INSERT INTO relay_round_state \
+                 (code, round, is_active, bpm, duration_seconds, score, tap_count, score_acknowledged, updated_at_ms) \
+                 VALUES (?, ?, 1, ?, ?, NULL, 0, 0, ?) \
+                 ON CONFLICT(code) DO UPDATE SET \
+                   round = excluded.round, is_active = 1, bpm = excluded.bpm, \
+                   duration_seconds = excluded.duration_seconds, score = NULL, tap_count = 0, \
+                   score_acknowledged = 0, updated_at_ms = excluded.updated_at_ms",
+            )
+            .bind(code)
+            .bind(round)
+            .bind(bpm)
+            .bind(duration)
+            .bind(now)
+            .execute(database)
+            .await?;
+            Ok(true)
+        }
+        ("host", Some("score")) => {
+            let changed = sqlx::query(
+                "UPDATE relay_round_state \
+                 SET score = ?, tap_count = ?, score_acknowledged = 0, updated_at_ms = ? \
+                 WHERE code = ? AND round = ? AND is_active = 1",
+            )
+            .bind(value["score"].as_i64().expect("validated score"))
+            .bind(value["tap_count"].as_i64().expect("validated tap count"))
+            .bind(now)
+            .bind(code)
+            .bind(value["round"].as_i64().expect("validated round"))
+            .execute(database)
+            .await?;
+            Ok(changed.rows_affected() == 1)
+        }
+        ("companion", Some("score_ack")) => {
+            let changed = sqlx::query(
+                "UPDATE relay_round_state \
+                 SET score_acknowledged = 1, updated_at_ms = ? \
+                 WHERE code = ? AND round = ? AND score = ? AND tap_count = ? AND score_acknowledged = 0",
+            )
+            .bind(now)
+            .bind(code)
+            .bind(value["round"].as_i64().expect("validated round"))
+            .bind(value["score"].as_i64().expect("validated score"))
+            .bind(value["tap_count"].as_i64().expect("validated tap count"))
+            .execute(database)
+            .await?;
+            Ok(changed.rows_affected() == 1)
+        }
+        ("host", Some("round_end")) => {
+            let changed = sqlx::query(
+                "UPDATE relay_round_state SET is_active = 0, updated_at_ms = ? WHERE code = ? AND round = ?",
+            )
+            .bind(now)
+            .bind(code)
+            .bind(value["round"].as_i64().expect("validated round"))
+            .execute(database)
+            .await?;
+            Ok(changed.rows_affected() == 1)
+        }
+        _ => Ok(true),
+    }
+}
+
+async fn stored_relay_round_state(
+    database: &SqlitePool,
+    code: &str,
+) -> Result<Option<StoredRelayRoundState>, sqlx::Error> {
+    sqlx::query(
+        "SELECT round, is_active, bpm, duration_seconds, score, tap_count, score_acknowledged \
+         FROM relay_round_state WHERE code = ?",
+    )
+    .bind(code)
+    .fetch_optional(database)
+    .await
+    .map(|row| {
+        row.map(|row| StoredRelayRoundState {
+            round: row.get("round"),
+            is_active: row.get::<i64, _>("is_active") != 0,
+            bpm: row.get("bpm"),
+            duration_seconds: row.get("duration_seconds"),
+            score: row.get("score"),
+            tap_count: row.get("tap_count"),
+            score_acknowledged: row.get::<i64, _>("score_acknowledged") != 0,
+        })
+    })
+}
+
+fn relay_round_state_message(round_state: &StoredRelayRoundState) -> serde_json::Value {
+    json!({
+        "type": "relay_state",
+        "round": round_state.round,
+        "active": round_state.is_active,
+        "bpm": round_state.bpm,
+        "duration": round_state.duration_seconds,
+        "score": round_state.score,
+        "tap_count": round_state.tap_count,
+        "score_acknowledged": round_state.score_acknowledged,
+    })
 }
 
 async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next: Next) -> Response {
@@ -1362,6 +1556,73 @@ mod tests {
         assert_expiring_room_closes_an_open_websocket().await;
     }
 
+    #[tokio::test]
+    async fn regression_delayed_score_ack_replays_durable_round_state_after_companion_reconnect() {
+        // The browser regression drops the first score frame, closes the
+        // companion socket, and reconnects it. Model the server boundary here:
+        // a restarted/new socket must read the persisted score, and only the
+        // matching companion acknowledgement may mark that score delivered.
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        let first_store = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(sqlite_connect_options(&database_path, false))
+            .await
+            .unwrap();
+        MIGRATOR.run(&first_store).await.unwrap();
+        let code = "BEAT24";
+
+        let started = json!({ "type": "round_start", "round": 1, "bpm": 60, "duration": 60 });
+        assert!(allowed_room_message("host", &started));
+        assert!(persist_relay_message(&first_store, code, "host", &started)
+            .await
+            .unwrap());
+        let score = json!({ "type": "score", "round": 1, "score": 100, "tap_count": 1 });
+        assert!(persist_relay_message(&first_store, code, "host", &score)
+            .await
+            .unwrap());
+        first_store.close().await;
+
+        let reconnected_store = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(sqlite_connect_options(&database_path, false))
+            .await
+            .unwrap();
+        let replayed = stored_relay_round_state(&reconnected_store, code)
+            .await
+            .unwrap()
+            .expect("the reconnect must receive the persisted score state");
+        assert_eq!(
+            relay_round_state_message(&replayed),
+            json!({
+                "type": "relay_state", "round": 1, "active": true, "bpm": 60,
+                "duration": 60, "score": 100, "tap_count": 1, "score_acknowledged": false,
+            })
+        );
+
+        let mismatched_ack =
+            json!({ "type": "score_ack", "round": 1, "score": 99, "tap_count": 1 });
+        assert!(
+            !persist_relay_message(&reconnected_store, code, "companion", &mismatched_ack)
+                .await
+                .unwrap()
+        );
+        let acknowledgement =
+            json!({ "type": "score_ack", "round": 1, "score": 100, "tap_count": 1 });
+        assert!(
+            persist_relay_message(&reconnected_store, code, "companion", &acknowledgement)
+                .await
+                .unwrap()
+        );
+        assert!(
+            stored_relay_round_state(&reconnected_store, code)
+                .await
+                .unwrap()
+                .unwrap()
+                .score_acknowledged
+        );
+    }
+
     async fn assert_expiring_room_closes_an_open_websocket() {
         let (application, _storage) = isolated_app(Duration::from_millis(80)).await;
         let create = application
@@ -1422,7 +1683,7 @@ mod tests {
     fn validates_messages_by_room_role() {
         assert!(allowed_room_message(
             "companion",
-            &json!({ "type": "tap", "at": 1000, "round": 1, "tap_id": 1 })
+            &json!({ "type": "tap", "at": 1000, "round": 1, "tap_id": 1, "beat_id": 1, "cue_delay": 25 })
         ));
         assert!(allowed_room_message(
             "companion",
@@ -1431,6 +1692,10 @@ mod tests {
         assert!(allowed_room_message(
             "host",
             &json!({ "type": "score", "score": 78, "round": 1, "tap_count": 1 })
+        ));
+        assert!(allowed_room_message(
+            "host",
+            &json!({ "type": "round_start", "round": 1, "bpm": 104, "duration": 60 })
         ));
         assert!(!allowed_room_message(
             "companion",
@@ -1442,7 +1707,11 @@ mod tests {
         ));
         assert!(!allowed_room_message(
             "host",
-            &json!({ "type": "round_start", "bpm": 900, "duration": 60 })
+            &json!({ "type": "round_start", "round": 1, "bpm": 900, "duration": 60 })
+        ));
+        assert!(!allowed_room_message(
+            "host",
+            &json!({ "type": "round_start", "bpm": 104, "duration": 60 })
         ));
     }
 }

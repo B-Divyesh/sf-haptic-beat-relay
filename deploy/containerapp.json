@@ -19,7 +19,7 @@
     "mountPath": "/data"
   },
   "stateTopology": {
-    "roomState": "temporary records in durable SQLite under /data",
+    "roomState": "temporary room and relay-score records in durable SQLite under /data",
     "webSocketBroadcast": "process-local broadcast protected by singleton deployment",
     "rateLimitBuckets": "shared SQLite counters under /data",
     "persistence": "rooms survive restarts and expire after two hours"

@@ -60,20 +60,20 @@ npm run test:live-topology
 ```
 
 The 30-round relay check reconnects both devices, drops one delayed score
-frame, and requires the replayed score to match before the host displays it.
+frame, and requires persisted score state on both peers.
 
 ## How it works
 
 - The host opens a room and gets a six-character code.
 - One friend joins with that code.
 - A WebSocket relays beat, tap, presence, score, and score acknowledgement messages.
-- Both devices reconnect automatically and restore the active round.
+- Both devices reconnect automatically and restore the active round and score.
 - The friend receives phone and controller vibration when supported.
 - The screen flashes each cue when vibration is unavailable.
 
-Rooms expire after two hours. SQLite stores temporary room and rate-limit
-records under `/data`, so active rooms survive a restart. The live relay uses
-one Container App replica because WebSocket delivery is process-local.
+Rooms expire after two hours. SQLite stores temporary room, round, score, and
+rate-limit records under `/data`, so active rooms survive a restart. The live
+relay uses one Container App replica because WebSocket delivery is process-local.
 
 ## Container
 

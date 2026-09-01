@@ -11,7 +11,11 @@ type RoomMessage = {
   score?: number;
   round?: number;
   tap_id?: number;
+  beat_id?: number;
+  cue_delay?: number;
   tap_count?: number;
+  active?: boolean;
+  score_acknowledged?: boolean;
 };
 
 type RelayConnectionState = 'connecting' | 'open' | 'reconnecting';
@@ -392,6 +396,7 @@ async function setupHost(): Promise<void> {
   let scores: number[] = [];
   let pendingScore: ScoreUpdate | undefined;
   const seenTapIds = new Set<number>();
+  let beatId = 0;
 
   cleanupPage = () => {
     socket?.close();
@@ -430,10 +435,6 @@ async function setupHost(): Promise<void> {
         paired = Boolean(message.connected);
         state.innerHTML = `<span class="status-dot ${paired ? 'connected' : ''}"></span>${paired ? 'Your friend is connected. The round is ready.' : 'Your friend left. Share the code to reconnect.'}`;
         start.disabled = !paired || roundActive;
-        if (paired && roundActive) {
-          socket?.send(JSON.stringify({ type: 'round_start', bpm: Number(bpmInput.value), duration: 60, round }));
-          if (pendingScore) socket?.send(JSON.stringify({ type: 'score', ...pendingScore }));
-        }
       }
       if (
         message.type === 'tap'
@@ -445,12 +446,30 @@ async function setupHost(): Promise<void> {
         && !seenTapIds.has(message.tap_id)
       ) {
         seenTapIds.add(message.tap_id);
-        const delta = nearestBeatDelta(Date.now(), beats);
+        const beatMs = 60000 / Number(bpmInput.value);
+        // A browser can deliver this WebSocket frame long after the friend
+        // pressed. Score the companion's cue-to-tap interval when supplied;
+        // the host-arrival fallback keeps an older client usable.
+        const delta = typeof message.cue_delay === 'number' && message.cue_delay >= 0
+          ? message.cue_delay
+          : nearestBeatDelta(Date.now(), beats);
         if (delta === null) return;
-        scores.push(timingScore(delta, 60000 / Number(bpmInput.value)));
+        scores.push(timingScore(delta, beatMs));
         pendingScore = { score: averageScore(scores), round, tap_count: scores.length };
         socket?.send(JSON.stringify({ type: 'score', ...pendingScore }));
         pulseReturn();
+      }
+      if (
+        message.type === 'score'
+        && pendingScore
+        && message.score === pendingScore.score
+        && message.round === pendingScore.round
+        && message.tap_count === pendingScore.tap_count
+      ) {
+        // The relay only broadcasts a score after SQLite commits it. This is
+        // the host's durable acknowledgement; a companion ACK then confirms
+        // that the peer has applied the same persisted score.
+        updateScore(pendingScore.score, pendingScore.tap_count);
       }
       if (
         message.type === 'score_ack'
@@ -460,6 +479,17 @@ async function setupHost(): Promise<void> {
         && message.tap_count === pendingScore.tap_count
       ) {
         updateScore(pendingScore.score, pendingScore.tap_count);
+      }
+      if (
+        message.type === 'relay_state'
+        && typeof message.round === 'number'
+        && typeof message.score === 'number'
+        && typeof message.tap_count === 'number'
+        && message.round >= round
+      ) {
+        round = message.round;
+        pendingScore = { score: message.score, round: message.round, tap_count: message.tap_count };
+        updateScore(message.score, message.tap_count);
       }
     }, (connectionState) => {
       if (connectionState === 'reconnecting') {
@@ -488,6 +518,7 @@ async function setupHost(): Promise<void> {
       roundActive = true;
       scores = [];
       beats = [];
+      beatId = 0;
       pendingScore = undefined;
       seenTapIds.clear();
       updateScore(0, 0);
@@ -501,8 +532,8 @@ async function setupHost(): Promise<void> {
       audioContext ??= new AudioContext();
       void audioContext.resume();
       void audio?.play().catch(() => { fileName.textContent = 'The audio loop could not play. The built-in click is running.'; });
-      fireHostBeat(audioContext, socket, round, beats);
-      timer = window.setInterval(() => fireHostBeat(audioContext!, socket!, round, beats), 60000 / bpm);
+      fireHostBeat(audioContext, socket, round, beats, ++beatId);
+      timer = window.setInterval(() => fireHostBeat(audioContext!, socket!, round, beats, ++beatId), 60000 / bpm);
       finishTimer = window.setTimeout(() => finishRound(), duration * 1000);
     });
   } catch (cause) {
@@ -580,11 +611,17 @@ function openRoomSocket(
   };
 }
 
-function fireHostBeat(context: AudioContext, socket: RelaySocket, round: number, beats: number[]): void {
+function fireHostBeat(
+  context: AudioContext,
+  socket: RelaySocket,
+  round: number,
+  beats: number[],
+  beatId: number,
+): void {
   const at = Date.now();
   beats.push(at);
   if (beats.length > 8) beats.shift();
-  socket.send(JSON.stringify({ type: 'beat', at, round }));
+  socket.send(JSON.stringify({ type: 'beat', at, round, beat_id: beatId }));
   const oscillator = context.createOscillator();
   const gain = context.createGain();
   oscillator.frequency.value = 880;
@@ -604,6 +641,32 @@ async function setupCompanion(code: string): Promise<void> {
   let roundActive = false;
   let round = 0;
   let tapId = 0;
+  let lastCueAt: number | undefined;
+  let lastBeatId: number | undefined;
+
+  const acknowledgeScore = (message: RoomMessage) => {
+    if (
+      typeof message.score !== 'number'
+      || typeof message.round !== 'number'
+      || typeof message.tap_count !== 'number'
+    ) return;
+    socket?.send(JSON.stringify({
+      type: 'score_ack',
+      score: message.score,
+      round: message.round,
+      tap_count: message.tap_count,
+    }));
+  };
+
+  const applyScore = (message: RoomMessage) => {
+    if (
+      typeof message.score !== 'number'
+      || typeof message.tap_count !== 'number'
+      || message.round !== round
+    ) return;
+    updateScore(message.score, undefined);
+    acknowledgeScore(message);
+  };
 
   cleanupPage = () => socket?.close();
   try {
@@ -624,23 +687,28 @@ async function setupCompanion(code: string): Promise<void> {
       if (message.type === 'round_start') {
         roundActive = true;
         round = message.round ?? 0;
-        pad.disabled = false;
+        lastCueAt = undefined;
+        lastBeatId = undefined;
+        pad.disabled = true;
         roundState.textContent = `Round ${message.round} is live at ${message.bpm} BPM.`;
       }
-      if (message.type === 'beat') cueCompanion();
-      if (
-        message.type === 'score'
-        && typeof message.score === 'number'
-        && typeof message.tap_count === 'number'
-        && message.round === round
-      ) {
-        updateScore(message.score, undefined);
-        socket?.send(JSON.stringify({
-          type: 'score_ack',
-          score: message.score,
-          round: message.round,
-          tap_count: message.tap_count,
-        }));
+      if (message.type === 'beat') {
+        lastCueAt = Date.now();
+        lastBeatId = message.beat_id;
+        pad.disabled = false;
+        cueCompanion();
+      }
+      if (message.type === 'score') applyScore(message);
+      if (message.type === 'relay_state' && typeof message.round === 'number') {
+        round = message.round;
+        roundActive = Boolean(message.active);
+        lastCueAt = undefined;
+        lastBeatId = undefined;
+        pad.disabled = true;
+        if (roundActive) {
+          roundState.textContent = `Round ${message.round} is live at ${message.bpm ?? 'the selected'} BPM.`;
+        }
+        applyScore(message);
       }
       if (message.type === 'round_end') {
         roundActive = false;
@@ -664,9 +732,17 @@ async function setupCompanion(code: string): Promise<void> {
   }
 
   const tap = () => {
-    if (!roundActive || !socket?.isOpen()) return;
+    if (!roundActive || !socket?.isOpen() || lastCueAt === undefined || lastBeatId === undefined) return;
     tapId += 1;
-    socket.send(JSON.stringify({ type: 'tap', at: Date.now(), round, tap_id: tapId }));
+    socket.send(JSON.stringify({
+      type: 'tap',
+      at: Date.now(),
+      round,
+      tap_id: tapId,
+      beat_id: lastBeatId,
+      cue_delay: Math.max(0, Date.now() - lastCueAt),
+    }));
+    pad.disabled = true;
     pad.classList.remove('tapped');
     requestAnimationFrame(() => pad.classList.add('tapped'));
   };

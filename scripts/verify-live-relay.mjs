@@ -72,6 +72,7 @@ try {
     let hostConnections = 0;
     let companionConnections = 0;
     let delayedScoreFrames = 0;
+    let replayedRoundStates = 0;
     const faults = [];
     const recordFault = (where) => (message) => {
       if (message.type() === 'error') faults.push(`${where}: ${message.text()}`);
@@ -91,8 +92,10 @@ try {
       companionSocket = route;
       const server = route.connectToServer();
       server.onMessage((message) => {
-        let isScore = false;
-        try { isScore = JSON.parse(String(message)).type === 'score'; } catch { /* Forward malformed frames unchanged. */ }
+        let type = '';
+        try { type = JSON.parse(String(message)).type; } catch { /* Forward malformed frames unchanged. */ }
+        if (type === 'relay_state' && companionConnections > 1) replayedRoundStates += 1;
+        const isScore = type === 'score';
         if (!isScore) {
           route.send(message);
           return;
@@ -136,6 +139,7 @@ try {
       await waitUntil(() => delayedScoreFrames > 0, `round ${attempt} delayed score frame`);
       await companionSocket.close({ code: 1012, reason: 'live regression companion reconnect during score' });
       await waitUntil(() => companionConnections === 2, `round ${attempt} companion reconnect`);
+      await waitUntil(() => replayedRoundStates > 0, `round ${attempt} persisted relay state replay`);
       await host.waitForFunction(() => document.querySelector('#tap-count')?.textContent === '1 returned tap.', undefined, { timeout: 10_000 });
 
       const [hostScore, companionScore, hostState, companionState] = await Promise.all([

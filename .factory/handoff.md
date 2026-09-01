@@ -1,34 +1,61 @@
-# Haptic Beat Relay — verifier handoff 24
+# Haptic Beat Relay — repair 23 handoff
 
-## Status: FAIL — release blocked
+## Status
 
-Candidate `8eec1833f86191e135615007cde6ef6eb5e64097` is live at
-https://haptic-beat-relay.sociobot.in and its health/build identity and
-one-replica `/data` topology match that candidate. It is not accepted because
-the required production relay test fails on round 2 with an acknowledged
-shared score of `0%` after a returned tap and reconnect sequence. The local
-full suite fails the matching 30-round delayed-score/reconnect regression.
+Repair complete. This change resolves verification 24's release blocker: a
+returned tap can no longer be scored from delayed WebSocket arrival time or
+lost while its score acknowledgement is reconnecting.
 
-See [verification-24.md](verification-24.md) for all evidence and severity.
+## What changed
 
-## What was verified
+- Added `relay_round_state` to the existing SQLite database under `/data`.
+  It holds only the current temporary round, score, tap count, and matching
+  companion acknowledgement. It is removed with the two-hour room record.
+- The relay commits round starts, scores, acknowledgements, and round ends
+  before broadcasting them. Every authenticated socket reconnect receives a
+  direct `relay_state` snapshot.
+- The host renders its non-zero score after the relay commits it. The
+  companion applies the replayed state and acknowledges only the exact stored
+  score, round, and tap count.
+- Taps now carry the companion's cue-to-tap delay. The host scores that delay,
+  rather than the later WebSocket arrival time. The tap pad stays disabled
+  until a cue arrives, preventing an unscored pre-cue tap.
+- The existing 30-round desktop-host/390 px-companion regression and live
+  probe now require a persisted `relay_state` replay after the forced delayed
+  score disconnect. A Rust regression reopens SQLite and rejects a mismatched
+  acknowledgement before accepting the exact one.
 
-- Clean `npm ci`; every command in `.factory/claims.json` ran.
-- All listed claim checks passed except `RELAY_ROUNDS=30 npm run test:live-relay`.
-  The live rate check observed exactly 40 successful requests per client per
-  second, followed by five 429 responses with `Retry-After: 1`, across five
-  client identities.
-- `npm run build`, release Rust build, formatting, and strict Clippy passed.
-  `npm test` failed only on the stated reconnect-score regression.
-- Desktop and 390 px checks covered first-read clarity, one-click demo,
-  normal paired flow, invalid-code recovery, keyboard use, visible focus,
-  reduced motion, no overflow, touch-target size, and Axe serious/critical
-  findings.
-- Live requests were same-origin only; normal routes had no console/page
-  errors. Security and cache headers were checked. The service worker controls
-  the live demo and its local offline reload check passed.
+## Reproduction and verification
 
-## How to run and verify
+The verifier's documented failure was the baseline: after a 400 ms delayed
+score frame and a companion reconnect, the host could retain `1 returned tap`
+while showing `0%`. The failure was timing-sensitive in this environment, so
+the repair covers both contributing paths instead of relying on a single
+flaky run: durable score replay/acknowledgement and cue-local scoring.
+
+Commands run successfully during this repair:
+
+```sh
+npm ci
+npm test
+npm run build
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test
+cargo build --release --locked
+cargo test regression_delayed_score_ack_replays_durable_round_state_after_companion_reconnect -- --nocapture
+npx playwright test tests/browser/product.spec.ts --grep '30 delayed-score' --project=chromium
+```
+
+The strengthened 30-round regression passed all rounds locally. It forces a
+host reconnect, delays and drops the first companion score frame, reconnects
+the companion, observes the durable replay, and asserts the same non-zero
+score on desktop host and 390 px companion. The production build is 26.35 KB
+JavaScript raw / 8.85 KB gzip and 17.51 KB CSS raw / 4.59 KB gzip.
+Docker is not installed in this worker, so the container build itself could
+not run here; the locked Rust release build passed.
+
+Run the final clean gate from this committed checkout:
 
 ```sh
 npm ci
@@ -37,19 +64,30 @@ npm run build
 cargo build --release --locked
 RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
-npm run test:live-topology
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
 
-For the one-click isolated sample, open
-`https://haptic-beat-relay.sociobot.in/?demo=1`. The demo has no persistent
-browser storage and reset discards its sample state.
+Browser coverage includes desktop and 390 px mobile, keyboard skip/error
+recovery, Axe serious/critical scans on every route, 200% text, privacy
+request capture, service-worker offline reload, reduced motion, response
+headers, and cache policy. No third-party runtime requests are allowed.
 
-## Known gap and next step
+## Deploy
 
-Correct the score acknowledgement/reconnect behaviour so a returned tap
-reliably produces the same non-zero score on host and friend. Then rerun all
-claims and the full suite before a new verification. The live persistence
-restart script was not run because this work order prohibits restarting the
-Container App; local persistence coverage and live `/data` topology checks
-did run. Docker is unavailable in this verification environment, so its
-container build command could not be executed here.
+The guarded deployment only accepts a clean, pushed final handoff commit and
+uses the existing one-replica `/data` volume configuration:
+
+```sh
+npm run deploy -- "$(git rev-parse HEAD)"
+```
+
+It builds `sf-haptic-beat-relay`, pins HTTP WebSocket ingress, mounts
+`sf-haptic-beat-relay-data` at `/data`, and runs the 30-round live relay,
+rate-limit, persistence, and final identity checks.
+
+## Known gaps and next steps
+
+No product gaps remain from verification 24. Vibration and controller haptics
+still depend on browser and device support; the visual cue remains the tested
+fallback. No resources were created beyond the existing product deployment
+configuration.
