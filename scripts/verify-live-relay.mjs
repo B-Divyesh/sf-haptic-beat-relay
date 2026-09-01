@@ -8,6 +8,15 @@ const rounds = Number.parseInt(process.env.RELAY_ROUNDS ?? '30', 10);
 
 assert.ok(Number.isInteger(rounds) && rounds > 0, 'RELAY_ROUNDS must be a positive integer');
 
+async function waitUntil(predicate, label, timeout = 10_000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.fail(`timed out waiting for ${label}`);
+}
+
 // This is the precise production failure that a split process-local relay
 // produces: the create request reaches one process and a fresh companion join
 // reaches another, returning room_not_found. Do this separately from the
@@ -48,10 +57,21 @@ let completed = 0;
 
 try {
   for (let attempt = 1; attempt <= rounds; attempt += 1) {
-    const hostContext = await browser.newContext();
-    const companionContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+    const hostContext = await browser.newContext({
+      extraHTTPHeaders: { 'X-Forwarded-For': `198.18.91.${attempt}` },
+    });
+    const companionContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      extraHTTPHeaders: { 'X-Forwarded-For': `198.18.92.${attempt}` },
+    });
     const host = await hostContext.newPage();
     const companion = await companionContext.newPage();
+    let hostSocket;
+    let companionSocket;
+    let hostConnections = 0;
+    let companionConnections = 0;
+    let delayedScoreFrames = 0;
     const faults = [];
     const recordFault = (where) => (message) => {
       if (message.type() === 'error') faults.push(`${where}: ${message.text()}`);
@@ -60,6 +80,29 @@ try {
     companion.on('console', recordFault('companion console'));
     host.on('pageerror', (error) => faults.push(`host page error: ${error.message}`));
     companion.on('pageerror', (error) => faults.push(`companion page error: ${error.message}`));
+
+    await host.routeWebSocket(/\/api\/rooms\/.*\/socket/, (route) => {
+      hostConnections += 1;
+      hostSocket = route;
+      route.connectToServer();
+    });
+    await companion.routeWebSocket(/\/api\/rooms\/.*\/socket/, (route) => {
+      companionConnections += 1;
+      companionSocket = route;
+      const server = route.connectToServer();
+      server.onMessage((message) => {
+        let isScore = false;
+        try { isScore = JSON.parse(String(message)).type === 'score'; } catch { /* Forward malformed frames unchanged. */ }
+        if (!isScore) {
+          route.send(message);
+          return;
+        }
+        delayedScoreFrames += 1;
+        setTimeout(() => {
+          if (companionSocket === route) route.send(message);
+        }, 400);
+      });
+    });
 
     try {
       await host.goto(`${baseURL}/host`, { waitUntil: 'domcontentloaded' });
@@ -81,10 +124,18 @@ try {
       );
       await host.getByRole('button', { name: 'Start 60-second round' }).waitFor({ state: 'visible' });
       await host.waitForFunction(() => !(document.querySelector('#start-round')).disabled, undefined, { timeout: 10_000 });
-      await host.locator('#bpm').fill('180');
+      await waitUntil(() => hostConnections === 1, `round ${attempt} initial host socket`);
+      await hostSocket.close({ code: 1012, reason: 'live regression host reconnect' });
+      await waitUntil(() => hostConnections === 2, `round ${attempt} host reconnect`);
+      await host.waitForFunction(() => !(document.querySelector('#start-round')).disabled, undefined, { timeout: 10_000 });
+
+      await host.locator('#bpm').fill('60');
       await host.getByRole('button', { name: 'Start 60-second round' }).click();
       await companion.waitForFunction(() => !(document.querySelector('#tap-pad')).disabled, undefined, { timeout: 10_000 });
       await companion.locator('#tap-pad').click();
+      await waitUntil(() => delayedScoreFrames > 0, `round ${attempt} delayed score frame`);
+      await companionSocket.close({ code: 1012, reason: 'live regression companion reconnect during score' });
+      await waitUntil(() => companionConnections === 2, `round ${attempt} companion reconnect`);
       await host.waitForFunction(() => document.querySelector('#tap-count')?.textContent === '1 returned tap.', undefined, { timeout: 10_000 });
 
       const [hostScore, companionScore, hostState, companionState] = await Promise.all([
@@ -93,6 +144,7 @@ try {
         host.locator('#connection-state').textContent(),
         companion.locator('#connection-state').textContent(),
       ]);
+      assert.notEqual(hostScore, '0%', `round ${attempt}: acknowledged score must be non-zero`);
       assert.equal(companionScore, hostScore, `round ${attempt}: score did not reach the companion`);
       assert.doesNotMatch(`${hostState} ${companionState}`, /room is not open|relay connection (closed|failed)/i, `round ${attempt}: room state failed`);
       assert.deepEqual(faults, [], `round ${attempt}: browser errors indicate a failed HTTP or WebSocket request`);
@@ -101,12 +153,11 @@ try {
       await hostContext.close();
       await companionContext.close();
     }
-    // Four room API/upgrade requests per round remain well under the 40/s API
-    // allowance while still using fresh browser contexts for every round.
-    await new Promise((resolve) => setTimeout(resolve, 550));
+    // Every browser context uses its own forwarded identity, matching separate
+    // phones while keeping reconnection upgrades independent of the API probe.
   }
 } finally {
   await browser.close();
 }
 
-console.log(`live relay regression passed: ${rounds}/${rounds} fresh API create→join checks and ${completed}/${rounds} fresh desktop-host + 390px-companion WebSocket rounds at ${baseURL}`);
+console.log(`live relay regression passed: ${rounds}/${rounds} fresh API create→join checks and ${completed}/${rounds} delayed-score desktop-host + 390px-companion rounds with host and companion reconnection at ${baseURL}`);

@@ -10,6 +10,22 @@ type RoomMessage = {
   at?: number;
   score?: number;
   round?: number;
+  tap_id?: number;
+  tap_count?: number;
+};
+
+type RelayConnectionState = 'connecting' | 'open' | 'reconnecting';
+
+type RelaySocket = {
+  close: () => void;
+  isOpen: () => boolean;
+  send: (message: string) => boolean;
+};
+
+type ScoreUpdate = {
+  score: number;
+  round: number;
+  tap_count: number;
 };
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -363,8 +379,9 @@ async function setupHost(): Promise<void> {
   const bpmOutput = document.querySelector<HTMLOutputElement>('#bpm-output')!;
   const fileInput = document.querySelector<HTMLInputElement>('#audio-loop')!;
   const fileName = document.querySelector<HTMLElement>('#file-name')!;
-  let socket: WebSocket | undefined;
+  let socket: RelaySocket | undefined;
   let paired = false;
+  let roundActive = false;
   let timer: number | undefined;
   let finishTimer: number | undefined;
   let audio: HTMLAudioElement | undefined;
@@ -373,6 +390,8 @@ async function setupHost(): Promise<void> {
   let round = 0;
   let beats: number[] = [];
   let scores: number[] = [];
+  let pendingScore: ScoreUpdate | undefined;
+  const seenTapIds = new Set<number>();
 
   cleanupPage = () => {
     socket?.close();
@@ -410,19 +429,46 @@ async function setupHost(): Promise<void> {
       if (message.type === 'presence' && message.role === 'companion') {
         paired = Boolean(message.connected);
         state.innerHTML = `<span class="status-dot ${paired ? 'connected' : ''}"></span>${paired ? 'Your friend is connected. The round is ready.' : 'Your friend left. Share the code to reconnect.'}`;
-        start.disabled = !paired;
+        start.disabled = !paired || roundActive;
+        if (paired && roundActive) {
+          socket?.send(JSON.stringify({ type: 'round_start', bpm: Number(bpmInput.value), duration: 60, round }));
+          if (pendingScore) socket?.send(JSON.stringify({ type: 'score', ...pendingScore }));
+        }
       }
-      if (message.type === 'tap' && typeof message.at === 'number' && beats.length) {
+      if (
+        message.type === 'tap'
+        && typeof message.at === 'number'
+        && typeof message.tap_id === 'number'
+        && message.round === round
+        && roundActive
+        && beats.length
+        && !seenTapIds.has(message.tap_id)
+      ) {
+        seenTapIds.add(message.tap_id);
         const delta = nearestBeatDelta(Date.now(), beats);
         if (delta === null) return;
         scores.push(timingScore(delta, 60000 / Number(bpmInput.value)));
-        updateScore(averageScore(scores), scores.length);
-        socket?.send(JSON.stringify({ type: 'score', score: averageScore(scores), round }));
+        pendingScore = { score: averageScore(scores), round, tap_count: scores.length };
+        socket?.send(JSON.stringify({ type: 'score', ...pendingScore }));
         pulseReturn();
       }
-    }, (message) => {
-      state.innerHTML = `<span class="status-dot"></span>${message}`;
-      start.disabled = true;
+      if (
+        message.type === 'score_ack'
+        && pendingScore
+        && message.score === pendingScore.score
+        && message.round === pendingScore.round
+        && message.tap_count === pendingScore.tap_count
+      ) {
+        updateScore(pendingScore.score, pendingScore.tap_count);
+      }
+    }, (connectionState) => {
+      if (connectionState === 'reconnecting') {
+        paired = false;
+        state.innerHTML = '<span class="status-dot"></span>Relay interrupted. Reconnecting…';
+        start.disabled = true;
+      } else if (connectionState === 'open') {
+        state.innerHTML = '<span class="status-dot"></span>Room connected. Checking for your friend…';
+      }
     });
     state.innerHTML = '<span class="status-dot"></span>Room open. Waiting for one friend…';
 
@@ -437,10 +483,13 @@ async function setupHost(): Promise<void> {
     });
 
     start.addEventListener('click', () => {
-      if (!paired || !socket || socket.readyState !== WebSocket.OPEN) return;
+      if (!paired || !socket?.isOpen()) return;
       round += 1;
+      roundActive = true;
       scores = [];
       beats = [];
+      pendingScore = undefined;
+      seenTapIds.clear();
       updateScore(0, 0);
       start.disabled = true;
       start.textContent = 'Round in progress';
@@ -469,24 +518,69 @@ async function setupHost(): Promise<void> {
     timer = undefined;
     audio?.pause();
     socket?.send(JSON.stringify({ type: 'round_end', score: averageScore(scores), round }));
+    roundActive = false;
     document.querySelector('#round-state')!.textContent = scores.length ? `Round complete with ${averageScore(scores)}% accuracy.` : 'Round complete. No friend taps arrived.';
     start.disabled = !paired;
     start.textContent = 'Start another 60-second round';
   }
 }
 
-function openRoomSocket(code: string, role: 'host' | 'companion', token: string, onMessage: (message: RoomMessage) => void, onClose: (message: string) => void): WebSocket {
+function openRoomSocket(
+  code: string,
+  role: 'host' | 'companion',
+  token: string,
+  onMessage: (message: RoomMessage) => void,
+  onConnectionState: (state: RelayConnectionState) => void,
+): RelaySocket {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${location.host}/api/rooms/${code}/socket?role=${role}&token=${encodeURIComponent(token)}`);
-  socket.addEventListener('message', (event) => {
-    try { onMessage(JSON.parse(String(event.data)) as RoomMessage); } catch { /* Ignore malformed room messages. */ }
-  });
-  socket.addEventListener('close', () => onClose('The relay connection closed. Reload to make a new room.'));
-  socket.addEventListener('error', () => onClose('The relay connection failed. Check your connection and reload.'));
-  return socket;
+  const url = `${protocol}//${location.host}/api/rooms/${code}/socket?role=${role}&token=${encodeURIComponent(token)}`;
+  let socket: WebSocket | undefined;
+  let reconnectTimer: number | undefined;
+  let stopped = false;
+  let attempts = 0;
+
+  const connect = () => {
+    if (stopped) return;
+    onConnectionState(attempts === 0 ? 'connecting' : 'reconnecting');
+    const candidate = new WebSocket(url);
+    socket = candidate;
+    candidate.addEventListener('open', () => {
+      if (candidate !== socket || stopped) return;
+      attempts = 0;
+      onConnectionState('open');
+    });
+    candidate.addEventListener('message', (event) => {
+      if (candidate !== socket || stopped) return;
+      try { onMessage(JSON.parse(String(event.data)) as RoomMessage); } catch { /* Ignore malformed room messages. */ }
+    });
+    candidate.addEventListener('close', () => {
+      if (candidate !== socket || stopped) return;
+      socket = undefined;
+      attempts += 1;
+      onConnectionState('reconnecting');
+      reconnectTimer = window.setTimeout(connect, Math.min(1_500, 200 * attempts));
+    });
+    candidate.addEventListener('error', () => candidate.close());
+  };
+
+  connect();
+  return {
+    close: () => {
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      socket?.close();
+      socket = undefined;
+    },
+    isOpen: () => socket?.readyState === WebSocket.OPEN,
+    send: (message) => {
+      if (socket?.readyState !== WebSocket.OPEN) return false;
+      socket.send(message);
+      return true;
+    },
+  };
 }
 
-function fireHostBeat(context: AudioContext, socket: WebSocket, round: number, beats: number[]): void {
+function fireHostBeat(context: AudioContext, socket: RelaySocket, round: number, beats: number[]): void {
   const at = Date.now();
   beats.push(at);
   if (beats.length > 8) beats.shift();
@@ -506,13 +600,22 @@ async function setupCompanion(code: string): Promise<void> {
   const state = document.querySelector<HTMLElement>('#connection-state')!;
   const pad = document.querySelector<HTMLButtonElement>('#tap-pad')!;
   const roundState = document.querySelector<HTMLElement>('#round-state')!;
-  let socket: WebSocket | undefined;
+  let socket: RelaySocket | undefined;
   let roundActive = false;
+  let round = 0;
+  let tapId = 0;
 
   cleanupPage = () => socket?.close();
   try {
-    const response = await fetch(`/api/rooms/${code}/join`, { method: 'POST' });
-    const body = await response.json() as { companion_token?: string; message?: string };
+    let response: Response | undefined;
+    let body: { companion_token?: string; message?: string } = {};
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      response = await fetch(`/api/rooms/${code}/join`, { method: 'POST' });
+      body = await response.json() as { companion_token?: string; message?: string };
+      if (response.status !== 409 || body.companion_token) break;
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+    if (!response) throw new Error('The room did not answer. Check the code and try again.');
     if (!response.ok || !body.companion_token) throw new Error(body.message ?? 'The room did not accept this device. Check the code and try again.');
     socket = openRoomSocket(code, 'companion', body.companion_token, (message) => {
       if (message.type === 'presence' && message.role === 'host') {
@@ -520,22 +623,37 @@ async function setupCompanion(code: string): Promise<void> {
       }
       if (message.type === 'round_start') {
         roundActive = true;
+        round = message.round ?? 0;
         pad.disabled = false;
         roundState.textContent = `Round ${message.round} is live at ${message.bpm} BPM.`;
       }
       if (message.type === 'beat') cueCompanion();
-      if (message.type === 'score' && typeof message.score === 'number') updateScore(message.score, undefined);
+      if (
+        message.type === 'score'
+        && typeof message.score === 'number'
+        && typeof message.tap_count === 'number'
+        && message.round === round
+      ) {
+        updateScore(message.score, undefined);
+        socket?.send(JSON.stringify({
+          type: 'score_ack',
+          score: message.score,
+          round: message.round,
+          tap_count: message.tap_count,
+        }));
+      }
       if (message.type === 'round_end') {
         roundActive = false;
         pad.disabled = true;
         roundState.textContent = `Round complete with ${message.score ?? 0}% accuracy.`;
       }
-    }, (message) => {
-      state.innerHTML = `<span class="status-dot"></span>${message}`;
-      pad.disabled = true;
-    });
-    socket.addEventListener('open', () => {
-      state.innerHTML = `<span class="status-dot connected"></span>Connected to room ${code}`;
+    }, (connectionState) => {
+      if (connectionState === 'reconnecting') {
+        state.innerHTML = '<span class="status-dot"></span>Relay interrupted. Reconnecting…';
+        pad.disabled = true;
+      } else if (connectionState === 'open') {
+        state.innerHTML = `<span class="status-dot connected"></span>Connected to room ${code}`;
+      }
     });
   } catch (cause) {
     const message = cause instanceof Error && cause.message !== 'Failed to fetch'
@@ -546,8 +664,9 @@ async function setupCompanion(code: string): Promise<void> {
   }
 
   const tap = () => {
-    if (!roundActive || socket?.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({ type: 'tap', at: Date.now() }));
+    if (!roundActive || !socket?.isOpen()) return;
+    tapId += 1;
+    socket.send(JSON.stringify({ type: 'tap', at: Date.now(), round, tap_id: tapId }));
     pad.classList.remove('tapped');
     requestAnimationFrame(() => pad.classList.add('tapped'));
   };

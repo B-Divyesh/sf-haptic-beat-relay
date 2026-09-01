@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 // The product keys limits by the first forwarded client address. Give each
@@ -195,6 +195,7 @@ test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue,
   const host = await hostContext.newPage();
   const companion = await companionContext.newPage();
   await host.goto('/host');
+  await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/);
   const code = await host.locator('#room-code').textContent();
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
 
@@ -250,6 +251,7 @@ test('@claim:haptic-output a supported phone and controller receive each compani
   const host = await hostContext.newPage();
   const companion = await companionContext.newPage();
   await host.goto('/host');
+  await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/);
   const code = await host.locator('#room-code').textContent();
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
   await companion.goto(`/join/${code}`);
@@ -292,6 +294,7 @@ test('@claim:real-round-duration a real round completes after 60 seconds', async
   const companion = await companionContext.newPage();
 
   await host.goto('/host');
+  await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/);
   const code = await host.locator('#room-code').textContent();
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
   await companion.goto(`/join/${code}`);
@@ -314,14 +317,42 @@ test('@claim:real-round-duration a real round completes after 60 seconds', async
   await companionContext.close();
 });
 
-test('regression: 30 fresh desktop-host and 390px companion rounds remain connected', async ({ browser }, testInfo) => {
+test('regression: 30 delayed-score rounds reconnect both devices and agree before the host publishes a score', async ({ browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'One 30-round run covers both explicit viewport sizes.');
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   for (let attempt = 1; attempt <= 30; attempt += 1) {
     const hostContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const companionContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
     const host = await hostContext.newPage();
     const companion = await companionContext.newPage();
+    let hostSocket: WebSocketRoute | undefined;
+    let companionSocket: WebSocketRoute | undefined;
+    let hostConnections = 0;
+    let companionConnections = 0;
+    let delayedScoreFrames = 0;
+
+    await host.routeWebSocket(/\/api\/rooms\/.*\/socket/, (route) => {
+      hostConnections += 1;
+      hostSocket = route;
+      route.connectToServer();
+    });
+    await companion.routeWebSocket(/\/api\/rooms\/.*\/socket/, (route) => {
+      companionConnections += 1;
+      companionSocket = route;
+      const server = route.connectToServer();
+      server.onMessage((message) => {
+        let isScore = false;
+        try { isScore = JSON.parse(String(message)).type === 'score'; } catch { /* Forward malformed frames unchanged. */ }
+        if (!isScore) {
+          route.send(message);
+          return;
+        }
+        delayedScoreFrames += 1;
+        setTimeout(() => {
+          if (companionSocket === route) route.send(message);
+        }, 400);
+      });
+    });
 
     await host.goto('/host');
     await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/, { timeout: 10_000 });
@@ -330,16 +361,25 @@ test('regression: 30 fresh desktop-host and 390px companion rounds remain connec
     await companion.goto(`/join/${code}`);
     await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
 
-    await host.locator('#bpm').fill('180');
+    await expect.poll(() => hostConnections).toBe(1);
+    await hostSocket!.close({ code: 1012, reason: 'regression host reconnect' });
+    await expect.poll(() => hostConnections).toBe(2);
+    await expect(host.getByRole('button', { name: 'Start 60-second round' })).toBeEnabled();
+
+    await host.locator('#bpm').fill('60');
     await host.getByRole('button', { name: 'Start 60-second round' }).click();
     await expect(companion.getByRole('button', { name: /Tap the beat/ })).toBeEnabled();
     await companion.getByRole('button', { name: /Tap the beat/ }).click();
+    await expect.poll(() => delayedScoreFrames).toBeGreaterThan(0);
+    await companionSocket!.close({ code: 1012, reason: 'regression companion reconnect during score' });
+    await expect.poll(() => companionConnections).toBe(2);
     await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
-    await expect(companion.locator('#score-value')).toHaveText(await host.locator('#score-value').textContent() ?? '0%');
+    const hostScore = await host.locator('#score-value').textContent();
+    expect(hostScore, `round ${attempt} should publish a non-zero acknowledged score`).not.toBe('0%');
+    await expect(companion.locator('#score-value')).toHaveText(hostScore ?? '0%');
 
     await hostContext.close();
     await companionContext.close();
-    await new Promise((resolve) => setTimeout(resolve, 550));
   }
 });
 

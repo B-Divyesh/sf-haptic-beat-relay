@@ -50,10 +50,10 @@
   },
   {
     "id": "live-relay",
-    "claim": "The deployed relay keeps fresh host and friend room, cue, tap, and score traffic connected.",
+    "claim": "The deployed relay reconnects fresh host and friend sessions and shows the same acknowledged score.",
     "where": "README live verification and deployment sections",
     "test": "RELAY_ROUNDS=30 npm run test:live-relay",
-    "sandbox": "30 fresh API rooms plus 30 fresh desktop-host and 390 px friend browser pairs against the live deployment; assert create, join, WebSocket cue, returned tap, shared score, and no browser errors"
+    "sandbox": "30 fresh API rooms plus 30 fresh desktop-host and 390 px friend browser pairs against the live deployment; force both sockets to reconnect, delay and drop the first score frame, then assert replayed round state and the same acknowledged score without browser errors"
   },
   {
     "id": "ephemeral-rooms",

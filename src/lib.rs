@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env,
     net::{IpAddr, SocketAddr},
     path::{Path as FilePath, PathBuf},
@@ -48,11 +48,15 @@ const DURABLE_SQLITE_VFS: &str = "unix-none";
 static MIGRATOR: Migrator = sqlx::migrate!();
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
+type SessionKey = (String, String, String);
+type RoomSessions = Arc<Mutex<HashMap<SessionKey, usize>>>;
 
 #[derive(Clone)]
 pub struct AppState {
     database: SqlitePool,
     channels: Arc<Mutex<HashMap<String, broadcast::Sender<String>>>>,
+    sessions: RoomSessions,
+    rejoinable_companions: Arc<Mutex<HashSet<(String, String)>>>,
     room_ttl: Duration,
 }
 
@@ -148,25 +152,31 @@ async fn app_with_database_path(
         .bind(started_at_ms)
         .execute(&database)
         .await?;
-    // A stopped process has no live companion socket. Release its persisted
-    // lease so the same friend can rejoin the durable room after a restart.
-    sqlx::query("UPDATE rooms SET companion_token = NULL WHERE companion_token IS NOT NULL")
-        .execute(&database)
-        .await?;
+    // Keep companion tokens across restarts so an open browser can reconnect
+    // to the same room. A fresh join may rotate an inactive token below.
     sqlx::query("DELETE FROM rate_limits WHERE window_started_ms <= ?")
         .bind(started_at_ms - duration_millis(RATE_RETENTION))
         .execute(&database)
         .await?;
-    let active_rooms = sqlx::query("SELECT code, expires_at_ms FROM rooms")
+    let active_rooms = sqlx::query("SELECT code, companion_token, expires_at_ms FROM rooms")
         .fetch_all(&database)
         .await?;
     let active_rates = sqlx::query("SELECT client, window_started_ms FROM rate_limits")
         .fetch_all(&database)
         .await?;
 
+    let rejoinable_companions = active_rooms
+        .iter()
+        .filter_map(|room| {
+            room.get::<Option<String>, _>("companion_token")
+                .map(|token| (room.get("code"), token))
+        })
+        .collect();
     let state = AppState {
         database,
         channels: Arc::new(Mutex::new(HashMap::new())),
+        sessions: Arc::new(Mutex::new(HashMap::new())),
+        rejoinable_companions: Arc::new(Mutex::new(rejoinable_companions)),
         room_ttl,
     };
     for room in active_rooms {
@@ -334,6 +344,51 @@ async fn join_room(
 
     match stored_room(&state.database, &code).await? {
         Some(room) if room.expires_at_ms > now_millis() && room.companion_token.is_some() => {
+            if role_is_connected(&state, &code, "companion").await {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "room_full",
+                    "That room already has a companion. Ask the host for a new room.",
+                ));
+            }
+
+            // The previous companion is no longer connected. Rotate its token
+            // atomically so a page reload can reclaim the room, while an open
+            // page can reconnect directly with its existing token.
+            let previous_token = room.companion_token.expect("checked above");
+            let rejoinable = state
+                .rejoinable_companions
+                .lock()
+                .await
+                .contains(&(code.clone(), previous_token.clone()));
+            if !rejoinable {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "room_full",
+                    "That room already has a companion. Ask the host for a new room.",
+                ));
+            }
+            let replaced = sqlx::query(
+                "UPDATE rooms SET companion_token = ? WHERE code = ? AND companion_token = ? AND expires_at_ms > ?",
+            )
+            .bind(&token)
+            .bind(&code)
+            .bind(&previous_token)
+            .bind(now_millis())
+            .execute(&state.database)
+            .await
+            .map_err(ApiError::database)?;
+            if replaced.rows_affected() == 1 {
+                state
+                    .rejoinable_companions
+                    .lock()
+                    .await
+                    .remove(&(code.clone(), previous_token));
+                channel_for(&state, &code).await;
+                return Ok(Json(RoomJoined {
+                    companion_token: token,
+                }));
+            }
             Err(ApiError::new(
                 StatusCode::CONFLICT,
                 "room_full",
@@ -403,6 +458,29 @@ async fn socket_session(
     let mut room_rx = channel.subscribe();
     let expiry = tokio::time::sleep(expires_after);
     tokio::pin!(expiry);
+    let other_role = if role == "host" { "companion" } else { "host" };
+    let other_connected = register_session(&state, &code, &role, &token).await;
+    let snapshot = json!({
+        "type": "presence",
+        "role": other_role,
+        "connected": other_connected,
+    })
+    .to_string();
+    if socket_tx
+        .send(Message::Text(snapshot.into()))
+        .await
+        .is_err()
+    {
+        let role_disconnected = unregister_session(&state, &code, &role, &token).await;
+        if role == "companion" && role_disconnected {
+            state
+                .rejoinable_companions
+                .lock()
+                .await
+                .insert((code, token));
+        }
+        return;
+    }
     let joined = json!({ "type": "presence", "role": role, "connected": true }).to_string();
     let _ = channel.send(joined);
 
@@ -442,17 +520,60 @@ async fn socket_session(
         }
     }
     let _ = socket_tx.send(Message::Close(None)).await;
-    if role == "companion" {
-        let _ = sqlx::query(
-            "UPDATE rooms SET companion_token = NULL WHERE code = ? AND companion_token = ?",
-        )
-        .bind(&code)
-        .bind(&token)
-        .execute(&state.database)
-        .await;
+    let role_disconnected = unregister_session(&state, &code, &role, &token).await;
+    if role_disconnected {
+        if role == "companion" {
+            state
+                .rejoinable_companions
+                .lock()
+                .await
+                .insert((code.clone(), token));
+        }
+        let left = json!({ "type": "presence", "role": role, "connected": false }).to_string();
+        let _ = channel.send(left);
     }
-    let left = json!({ "type": "presence", "role": role, "connected": false }).to_string();
-    let _ = channel.send(left);
+}
+
+async fn register_session(state: &AppState, code: &str, role: &str, token: &str) -> bool {
+    if role == "companion" {
+        state
+            .rejoinable_companions
+            .lock()
+            .await
+            .remove(&(code.to_owned(), token.to_owned()));
+    }
+    let mut sessions = state.sessions.lock().await;
+    let other_role = if role == "host" { "companion" } else { "host" };
+    let other_connected = sessions.iter().any(|((room, active_role, _), count)| {
+        room == code && active_role == other_role && *count > 0
+    });
+    *sessions
+        .entry((code.to_owned(), role.to_owned(), token.to_owned()))
+        .or_insert(0) += 1;
+    other_connected
+}
+
+async fn unregister_session(state: &AppState, code: &str, role: &str, token: &str) -> bool {
+    let mut sessions = state.sessions.lock().await;
+    let key = (code.to_owned(), role.to_owned(), token.to_owned());
+    if let Some(count) = sessions.get_mut(&key) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            sessions.remove(&key);
+        }
+    }
+    !sessions
+        .iter()
+        .any(|((room, active_role, _), count)| room == code && active_role == role && *count > 0)
+}
+
+async fn role_is_connected(state: &AppState, code: &str, role: &str) -> bool {
+    state
+        .sessions
+        .lock()
+        .await
+        .iter()
+        .any(|((room, active_role, _), count)| room == code && active_role == role && *count > 0)
 }
 
 async fn stored_room(database: &SqlitePool, code: &str) -> Result<Option<StoredRoom>, ApiError> {
@@ -485,6 +606,11 @@ async fn delete_room(state: &AppState, code: &str) -> Result<(), ApiError> {
         .await
         .map_err(ApiError::database)?;
     state.channels.lock().await.remove(code);
+    state
+        .rejoinable_companions
+        .lock()
+        .await
+        .retain(|(room, _)| room != code);
     Ok(())
 }
 
@@ -500,6 +626,11 @@ fn schedule_room_expiry(state: AppState, code: String, expires_at_ms: i64) {
             .map(|result| result.rows_affected() == 1)
             .unwrap_or(false);
         let channel = state.channels.lock().await.remove(&code);
+        state
+            .rejoinable_companions
+            .lock()
+            .await
+            .retain(|(room, _)| room != &code);
         if deleted {
             if let Some(channel) = channel {
                 let _ = channel.send(json!({ "type": "room_expired" }).to_string());
@@ -521,7 +652,12 @@ fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
         return false;
     };
     match (role, kind) {
-        ("companion", "tap") => value.get("at").and_then(|item| item.as_i64()).is_some(),
+        ("companion", "tap") => {
+            value.get("at").and_then(|item| item.as_i64()).is_some()
+                && value.get("round").and_then(|item| item.as_u64()).is_some()
+                && value.get("tap_id").and_then(|item| item.as_u64()).is_some()
+        }
+        ("companion", "score_ack") => valid_score_message(value),
         ("host", "beat") => value.get("at").and_then(|item| item.as_i64()).is_some(),
         ("host", "round_start") => {
             value
@@ -533,12 +669,25 @@ fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
                     .and_then(|item| item.as_u64())
                     .is_some_and(|seconds| (1..=3600).contains(&seconds))
         }
-        ("host", "score") | ("host", "round_end") => value
+        ("host", "score") => valid_score_message(value),
+        ("host", "round_end") => value
             .get("score")
             .and_then(|item| item.as_u64())
             .is_some_and(|score| score <= 100),
         _ => false,
     }
+}
+
+fn valid_score_message(value: &serde_json::Value) -> bool {
+    value
+        .get("score")
+        .and_then(|item| item.as_u64())
+        .is_some_and(|score| score <= 100)
+        && value.get("round").and_then(|item| item.as_u64()).is_some()
+        && value
+            .get("tap_count")
+            .and_then(|item| item.as_u64())
+            .is_some()
 }
 
 async fn rate_limit(State(state): State<AppState>, request: Request<Body>, next: Next) -> Response {
@@ -1016,62 +1165,57 @@ mod tests {
     #[tokio::test]
     async fn every_room_endpoint_uses_the_shared_rate_limiter() {
         let (application, _storage) = isolated_app(ROOM_TTL).await;
-        for request_number in 1..=40 {
-            let response = application
-                .clone()
-                .oneshot(
-                    Request::post("/api/rooms/ABCDEF/join")
-                        .header("x-forwarded-for", "198.51.100.61")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(
-                response.status(),
-                StatusCode::NOT_FOUND,
-                "join request {request_number}"
-            );
-        }
-        let limited_join = application
-            .clone()
-            .oneshot(
+        let join_responses = futures_util::future::join_all((0..41).map(|_| {
+            application.clone().oneshot(
                 Request::post("/api/rooms/ABCDEF/join")
                     .header("x-forwarded-for", "198.51.100.61")
                     .body(Body::empty())
                     .unwrap(),
             )
-            .await
-            .unwrap();
-        assert_eq!(limited_join.status(), StatusCode::TOO_MANY_REQUESTS);
+        }))
+        .await;
+        assert_eq!(
+            join_responses
+                .iter()
+                .filter(|response| response.as_ref().unwrap().status() == StatusCode::NOT_FOUND)
+                .count(),
+            40
+        );
+        assert_eq!(
+            join_responses
+                .iter()
+                .filter(|response| {
+                    response.as_ref().unwrap().status() == StatusCode::TOO_MANY_REQUESTS
+                })
+                .count(),
+            1
+        );
 
-        for request_number in 1..=40 {
-            let response = application
-                .clone()
-                .oneshot(
-                    Request::get("/api/rooms/ABCDEF/socket?role=host&token=BAD")
-                        .header("x-forwarded-for", "198.51.100.62")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_ne!(
-                response.status(),
-                StatusCode::TOO_MANY_REQUESTS,
-                "socket request {request_number}"
-            );
-        }
-        let limited_socket = application
-            .oneshot(
+        let socket_responses = futures_util::future::join_all((0..41).map(|_| {
+            application.clone().oneshot(
                 Request::get("/api/rooms/ABCDEF/socket?role=host&token=BAD")
                     .header("x-forwarded-for", "198.51.100.62")
                     .body(Body::empty())
                     .unwrap(),
             )
-            .await
-            .unwrap();
-        assert_eq!(limited_socket.status(), StatusCode::TOO_MANY_REQUESTS);
+        }))
+        .await;
+        assert_eq!(
+            socket_responses
+                .iter()
+                .filter(|response| response.as_ref().unwrap().status() == StatusCode::BAD_REQUEST)
+                .count(),
+            40
+        );
+        assert_eq!(
+            socket_responses
+                .iter()
+                .filter(|response| {
+                    response.as_ref().unwrap().status() == StatusCode::TOO_MANY_REQUESTS
+                })
+                .count(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -1277,6 +1421,18 @@ mod tests {
     #[test]
     fn validates_messages_by_room_role() {
         assert!(allowed_room_message(
+            "companion",
+            &json!({ "type": "tap", "at": 1000, "round": 1, "tap_id": 1 })
+        ));
+        assert!(allowed_room_message(
+            "companion",
+            &json!({ "type": "score_ack", "score": 78, "round": 1, "tap_count": 1 })
+        ));
+        assert!(allowed_room_message(
+            "host",
+            &json!({ "type": "score", "score": 78, "round": 1, "tap_count": 1 })
+        ));
+        assert!(!allowed_room_message(
             "companion",
             &json!({ "type": "tap", "at": 1000 })
         ));
