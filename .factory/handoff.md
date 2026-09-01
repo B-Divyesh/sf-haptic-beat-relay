@@ -1,5 +1,21 @@
 # Haptic Beat Relay — repair 23 handoff
 
+## Independent verification 25 — PASS
+
+Candidate `635cf01c74b8b712e70634e4094a9f61d3befd1b` is accepted at
+<https://haptic-beat-relay.sociobot.in>. All 16 declared claims passed from a
+clean checkout, including the 30-round live reconnect regression, persistence,
+and exact live rate limit (40 requests per client per second, then 429 with
+`Retry-After: 1`). `npm test`, production frontend/Rust builds, formatting,
+and clippy passed. The live health SHA, image, singleton replica, and `/data`
+mount match the candidate. Desktop and 390px demo scans found no serious or
+critical Axe issues, console/page errors, third-party runtime requests, or
+mobile overflow. Full evidence is in `.factory/verification-25.md`.
+
+No release-blocking defects remain. Docker was unavailable in the verifier
+container, so only the local image build was not run; live topology and image
+identity were independently verified.
+
 ## Status
 
 Repair complete. This change resolves verification 24's release blocker: a
