@@ -1,0 +1,448 @@
+CLAIM demo-sandbox: npm run test:browser -- --grep @claim:demo-sandbox
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:demo-sandbox
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 192ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:23684) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23683) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23683) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23684) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:87:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (13.1s)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:87:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (13.3s)
+
+  2 passed (15.6s)
+CLAIM sample-duration: npm run test:browser -- --grep @claim:sample-duration
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:sample-duration
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 198ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:23915) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23915) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:87:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (13.1s)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:87:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (13.3s)
+
+  2 passed (15.8s)
+CLAIM local-audio: npm run test:browser -- --grep @claim:local-audio
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:local-audio
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 209ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:24146) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24145) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24145) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24146) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:116:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (775ms)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:116:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (907ms)
+
+  2 passed (3.1s)
+CLAIM no-third-party: npm run test:browser -- --grep @claim:no-third-party
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:no-third-party
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 192ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:24406) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24405) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24406) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24405) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:116:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (785ms)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:116:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (820ms)
+
+  2 passed (3.1s)
+CLAIM no-account: npm run test:browser -- --grep @claim:no-account
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:no-account
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 202ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:24637) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24636) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24636) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24637) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:182:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (724ms)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:182:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (800ms)
+
+  2 passed (3.2s)
+CLAIM free-use: npm run test:browser -- --grep @claim:free-use
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:free-use
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 194ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:24872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24871) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24871) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:182:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (696ms)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:182:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (679ms)
+
+  2 passed (3.0s)
+CLAIM shared-score: npm run test:browser -- --grep @claim:shared-score
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:shared-score
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 191ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:25103) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25104) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25104) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25103) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:189:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (3.2s)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:189:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (3.5s)
+
+  2 passed (5.9s)
+CLAIM ephemeral-rooms: cargo test claim_ephemeral_rooms_persist_across_restart_until_the_configured_ttl
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (target/debug/deps/haptic_beat_relay-4fbfb7e793ee85ca)
+
+running 1 test
+test tests::claim_ephemeral_rooms_persist_across_restart_until_the_configured_ttl ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.52s
+
+     Running unittests src/main.rs (target/debug/deps/haptic_beat_relay-f43fe3e28d643855)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+CLAIM health: npm run test:browser -- --grep @claim:health
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:health
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 203ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:25390) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25389) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25389) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25390) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:150:1 › @claim:health health endpoint returns the build identity (125ms)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:150:1 › @claim:health health endpoint returns the build identity (105ms)
+
+  2 passed (2.6s)
+CLAIM connection-required: npm run test:browser -- --grep @claim:connection-required
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:connection-required
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 204ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:25584) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25585) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25584) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25585) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:175:1 › @claim:connection-required the real relay explains an offline failure (786ms)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:175:1 › @claim:connection-required the real relay explains an offline failure (919ms)
+
+  2 passed (3.4s)
+CLAIM visual-cue: npm run test:browser -- --grep @claim:visual-cue
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:visual-cue
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 186ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:25835) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25836) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25836) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25835) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [mobile] › tests/browser/product.spec.ts:189:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (2.9s)
+  ✓  2 [chromium] › tests/browser/product.spec.ts:189:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (3.0s)
+
+  2 passed (5.4s)
+CLAIM haptic-output: npm run test:browser -- --grep @claim:haptic-output
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:haptic-output
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 189ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:26108) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26109) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26109) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26108) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:218:1 › @claim:haptic-output a supported phone and controller receive each companion cue (1.9s)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:218:1 › @claim:haptic-output a supported phone and controller receive each companion cue (2.4s)
+
+  2 passed (4.7s)
+CLAIM real-round-duration: npm run test:browser -- --grep @claim:real-round-duration
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:real-round-duration
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 197ms
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:26384) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26385) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26385) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26384) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  -  2 [mobile] › tests/browser/product.spec.ts:284:1 › @claim:real-round-duration a real round completes after 60 seconds
+  ✓  1 [chromium] › tests/browser/product.spec.ts:284:1 › @claim:real-round-duration a real round completes after 60 seconds (1.0m)
+
+  1 skipped
+  1 passed (1.1m)

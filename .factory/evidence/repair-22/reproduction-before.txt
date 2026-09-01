@@ -1,0 +1,5 @@
+
+> haptic-beat-relay@1.0.0 test:live-relay
+> node scripts/verify-live-relay.mjs
+
+live relay regression passed: 30/30 fresh API create→join checks and 30/30 fresh desktop-host + 390px-companion WebSocket rounds at https://haptic-beat-relay.sociobot.in

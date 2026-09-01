@@ -1,0 +1,164 @@
+
+> haptic-beat-relay@1.0.0 test
+> npm run test:unit && npm run test:release-contract && npm run test:deployment-contract && npm run test:handoff-contract && cargo test && npm run test:clean-entrypoint && playwright test
+
+
+> haptic-beat-relay@1.0.0 test:unit
+> vitest run --config frontend/vitest.config.ts
+
+
+ RUN  v3.2.7 /work/repo/frontend
+
+ ✓ src/relay.test.ts (3 tests) 3ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  19:58:20
+   Duration  495ms (transform 36ms, setup 0ms, collect 31ms, tests 3ms, environment 0ms, prepare 117ms)
+
+
+> haptic-beat-relay@1.0.0 test:release-contract
+> node scripts/verify-release-contract.mjs
+
+release contract ok: rust:1-slim
+deployment contract ok: final pushed identity, guarded image provenance, one active revision/replica, HTTP ingress, relay, and repeated rate limits live-checked
+claims contract ok: 16 listed claims each map to exactly one regression test
+
+> haptic-beat-relay@1.0.0 test:deployment-contract
+> node scripts/verify-deploy-containerapp.mjs
+
+deployment command regression passed: final pushed identity, singleton topology, and all live gates are enforced
+
+> haptic-beat-relay@1.0.0 test:handoff-contract
+> node scripts/verify-handoff-release.mjs
+
+handoff release contract ok: 0 static commit id(s), all match HEAD
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (target/debug/deps/haptic_beat_relay-4fbfb7e793ee85ca)
+
+running 14 tests
+test tests::creates_and_joins_a_room ... ok
+test tests::claim_ephemeral_rooms_persist_across_restart_until_the_configured_ttl ... ok
+test tests::every_room_endpoint_uses_the_shared_rate_limiter ... ok
+test tests::rate_limit_groups_forwarded_ip_addresses_despite_changing_ports ... ok
+test tests::rate_limit_gives_each_forwarded_client_its_own_40_request_allowance ... ok
+test tests::rate_limit_returns_retry_after_after_exactly_40_requests_per_client ... ok
+test tests::regression_azure_files_uses_rollback_journal_and_waits_for_rollout_lock ... ok
+test tests::regression_azure_files_vfs_can_create_and_update_the_durable_schema ... ok
+test tests::rate_limit_uses_forwarded_client_ip ... ok
+test tests::regression_p0_separate_processes_share_room_records_in_sqlite ... ok
+test tests::regression_p0_concurrent_45_request_burst_has_exactly_40_accepts_and_5_retryable_limits ... ok
+test tests::unknown_frontend_routes_return_http_not_found ... ok
+test tests::validates_messages_by_room_role ... ok
+test tests::regression_p0_three_process_limiters_share_exact_40_request_allowance ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.72s
+
+     Running unittests src/main.rs (target/debug/deps/haptic_beat_relay-f43fe3e28d643855)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests haptic_beat_relay
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+> haptic-beat-relay@1.0.0 test:clean-entrypoint
+> node scripts/verify-clean-browser-entrypoint.mjs
+
+
+> haptic-beat-relay@1.0.0 test:browser
+> npm run build && playwright test --grep @claim:connection-required
+
+
+> haptic-beat-relay@1.0.0 build
+> tsc -p frontend/tsconfig.json --noEmit && vite build --config frontend/vite.config.ts
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json         0.19 kB │ gzip: 0.14 kB
+dist/index.html                  1.74 kB │ gzip: 0.60 kB
+dist/assets/index-CwpWePst.css  17.51 kB │ gzip: 4.59 kB
+dist/assets/index-KFU_4Di3.js   25.63 kB │ gzip: 8.65 kB │ map: 52.27 kB
+✓ built in 205ms
+[WebServer]    Compiling haptic-beat-relay v1.0.0 (/work/repo)
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.73s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 2 tests using 2 workers
+
+(node:30785) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30785) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/browser/product.spec.ts:175:1 › @claim:connection-required the real relay explains an offline failure (778ms)
+  ✓  2 [mobile] › tests/browser/product.spec.ts:175:1 › @claim:connection-required the real relay explains an offline failure (912ms)
+
+  2 passed (7.2s)
+[WebServer]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+[WebServer]      Running `target/debug/haptic-beat-relay`
+
+Running 40 tests using 2 workers
+
+(node:30961) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30962) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30961) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30962) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › tests/browser/product.spec.ts:15:1 › landing page explains the job and passes an accessibility scan (2.1s)
+  ✓   2 [mobile] › tests/browser/product.spec.ts:15:1 › landing page explains the job and passes an accessibility scan (2.1s)
+  ✓   3 [chromium] › tests/browser/product.spec.ts:31:1 › regression: the audience and sample action fit in the first viewport (901ms)
+  ✓   4 [mobile] › tests/browser/product.spec.ts:31:1 › regression: the audience and sample action fit in the first viewport (1.2s)
+  ✓   5 [chromium] › tests/browser/product.spec.ts:63:1 › keyboard users can skip navigation, change routes, and recover from form errors (1.1s)
+  ✓   6 [mobile] › tests/browser/product.spec.ts:63:1 › keyboard users can skip navigation, change routes, and recover from form errors (1.4s)
+  ✓   7 [chromium] › tests/browser/product.spec.ts:87:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (12.8s)
+  ✓   9 [chromium] › tests/browser/product.spec.ts:116:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (345ms)
+  ✓  10 [chromium] › tests/browser/product.spec.ts:131:1 › room creation reports its two-hour expiry (70ms)
+  ✓   8 [mobile] › tests/browser/product.spec.ts:87:1 › @claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds (13.0s)
+  ✓  11 [chromium] › tests/browser/product.spec.ts:139:1 › local API bursts enforce exactly 40 requests and return Retry-After (958ms)
+  ✓  13 [chromium] › tests/browser/product.spec.ts:150:1 › @claim:health health endpoint returns the build identity (19ms)
+  ✓  14 [chromium] › tests/browser/product.spec.ts:156:1 › response policy protects HTML, API errors, and immutable assets (132ms)
+  ✓  15 [chromium] › tests/browser/product.spec.ts:175:1 › @claim:connection-required the real relay explains an offline failure (362ms)
+  ✓  12 [mobile] › tests/browser/product.spec.ts:116:1 › @claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser (1.4s)
+  ✓  17 [mobile] › tests/browser/product.spec.ts:131:1 › room creation reports its two-hour expiry (115ms)
+  ✓  16 [chromium] › tests/browser/product.spec.ts:182:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (380ms)
+  ✓  18 [mobile] › tests/browser/product.spec.ts:139:1 › local API bursts enforce exactly 40 requests and return Retry-After (1.0s)
+  ✓  20 [mobile] › tests/browser/product.spec.ts:150:1 › @claim:health health endpoint returns the build identity (19ms)
+  ✓  21 [mobile] › tests/browser/product.spec.ts:156:1 › response policy protects HTML, API errors, and immutable assets (140ms)
+  ✓  22 [mobile] › tests/browser/product.spec.ts:175:1 › @claim:connection-required the real relay explains an offline failure (624ms)
+  ✓  23 [mobile] › tests/browser/product.spec.ts:182:1 › @claim:no-account and @claim:free-use host flow has no sign-in or payment gate (1.0s)
+  ✓  19 [chromium] › tests/browser/product.spec.ts:189:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (3.4s)
+  ✓  25 [chromium] › tests/browser/product.spec.ts:218:1 › @claim:haptic-output a supported phone and controller receive each companion cue (1.6s)
+  ✓  24 [mobile] › tests/browser/product.spec.ts:189:1 › @claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap (2.8s)
+  ✓  27 [mobile] › tests/browser/product.spec.ts:218:1 › @claim:haptic-output a supported phone and controller receive each companion cue (2.2s)
+  -  28 [mobile] › tests/browser/product.spec.ts:284:1 › @claim:real-round-duration a real round completes after 60 seconds
+  -  29 [mobile] › tests/browser/product.spec.ts:320:1 › regression: 30 delayed-score rounds reconnect both devices and agree before the host publishes a score
+  ✓  30 [mobile] › tests/browser/product.spec.ts:386:1 › regression: independent API request contexts never alternate room_not_found after create (752ms)
+  ✓  31 [mobile] › tests/browser/product.spec.ts:407:1 › service-worker-only offline reload keeps the built shell and manifest available (728ms)
+  ✓  32 [mobile] › tests/browser/product.spec.ts:421:1 › unknown routes return an HTTP 404 and non-audio files are rejected (452ms)
+  ✓  33 [mobile] › tests/browser/product.spec.ts:434:1 › real routes have one heading, useful titles, and no mobile overflow (5.2s)
+  ✓  34 [mobile] › tests/browser/product.spec.ts:454:1 › all visible interactive controls meet the 44px touch-target baseline (738ms)
+  ✓  26 [chromium] › tests/browser/product.spec.ts:284:1 › @claim:real-round-duration a real round completes after 60 seconds (1.0m)
+  ✓  35 [chromium] › tests/browser/product.spec.ts:320:1 › regression: 30 delayed-score rounds reconnect both devices and agree before the host publishes a score (1.7m)
+  ✓  36 [chromium] › tests/browser/product.spec.ts:386:1 › regression: independent API request contexts never alternate room_not_found after create (747ms)
+  ✓  37 [chromium] › tests/browser/product.spec.ts:407:1 › service-worker-only offline reload keeps the built shell and manifest available (521ms)
+  ✓  38 [chromium] › tests/browser/product.spec.ts:421:1 › unknown routes return an HTTP 404 and non-audio files are rejected (354ms)
+  ✓  39 [chromium] › tests/browser/product.spec.ts:434:1 › real routes have one heading, useful titles, and no mobile overflow (5.2s)
+  -  40 [chromium] › tests/browser/product.spec.ts:454:1 › all visible interactive controls meet the 44px touch-target baseline
+
+  3 skipped
+  37 passed (3.3m)

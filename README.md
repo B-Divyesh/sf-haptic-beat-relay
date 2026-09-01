@@ -59,11 +59,15 @@ RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 npm run test:live-topology
 ```
 
+The 30-round relay check reconnects both devices, drops one delayed score
+frame, and requires the replayed score to match before the host displays it.
+
 ## How it works
 
 - The host opens a room and gets a six-character code.
 - One friend joins with that code.
-- A WebSocket relays beat, tap, presence, and score messages.
+- A WebSocket relays beat, tap, presence, score, and score acknowledgement messages.
+- Both devices reconnect automatically and restore the active round.
 - The friend receives phone and controller vibration when supported.
 - The screen flashes each cue when vibration is unavailable.
 

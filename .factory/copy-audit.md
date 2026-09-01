@@ -1,4 +1,4 @@
-# Copy audit — repair 21
+# Copy audit — repair 22
 
 Counts use Unicode word tokens. Code commands are excluded. No audited sentence
 exceeds 22 words. No banned marketing term appears.
@@ -38,7 +38,7 @@ exceeds 22 words. No banned marketing term appears.
 
 ## README
 
-README prose was rescanned after the storage-contract repair. No prose sentence
+README prose was rescanned after the reconnect repair. No prose sentence
 exceeds 22 words or contains a banned marketing word. It uses **friend** for
 the second participant, **audio loop** for local sound, and **room** for the
 temporary relay.

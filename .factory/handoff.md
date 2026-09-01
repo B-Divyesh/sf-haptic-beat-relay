@@ -1,114 +1,89 @@
-# Haptic Beat Relay — current independent verification: FAIL
-
-**FAIL — release blocked for `ddecd1bbdd5552f772a49badf88a0e7483d57a46`.**
-The required 30-round live relay check failed at round 23: host score `78%`,
-companion score `0%`. See [verification-23.md](verification-23.md).
-
-# Haptic Beat Relay — repair 21 handoff
+# Haptic Beat Relay — repair 22 handoff
 
 ## Status
 
-Release-blocking verifier findings are repaired in source and covered by exact
-regressions. The guarded release command below deploys only
-`sf-haptic-beat-relay` and refuses success unless the live topology, build
-identity, 30-round relay, and five independent rate-limit bursts all pass.
+The release-blocking score-delivery race from
+[verification-23.md](verification-23.md) is repaired and covered by a repeated
+live-equivalent regression. This remains a `web-with-backend` container with
+one replica and SQLite state under `/data`.
 
-- Work order: `haptic-beat-relay-repair-21`
-- Artifact: `web-with-backend`
+- Work order: `haptic-beat-relay-repair-22`
 - Live URL: <https://haptic-beat-relay.sociobot.in>
-- Source report: [verification-22.md](verification-22.md)
+- Scope: only `sf-haptic-beat-relay` and its existing data mount
 
 ## Reproduction before repair
 
-- `npm run test:live-topology` failed with live ingress `auto` instead of
-  `http`. Scoped inspection showed a 1–3 scale range and no `/data` mount.
-- `RELAY_ROUNDS=30 npm run test:live-relay` failed at the companion connection
-  wait in `verify-live-relay.mjs:72`, matching the independent verifier.
-- The first repeated rate probe happened to pass 40/5 for all five identities.
-  The verifier's 45/45 and 80/45 evidence remains explained by per-process
-  counters across three replicas.
-- `cargo fmt --check` reproduced the verifier's formatting diff.
-- The 390 px screenshot reproduced headline words split across lines.
-- The first durable `/data` rollout reproduced one additional live-only
-  failure: SQLite WAL initialization returned `database is locked` on the
-  Azure Files mount while revisions overlapped.
+- The unchanged 30-round live command passed once, confirming the reported
+  round-23 defect was intermittent.
+- A live WebSocket interception delayed only the companion's score frame. The
+  host showed `40%` while the companion still showed `0%`, reproducing the
+  verifier's host/non-host mismatch. Both eventually converged to `40%`.
+- Evidence: `evidence/repair-22/reproduction-before.txt` and
+  `evidence/repair-22/deterministic-reproduction-before.txt`.
 
-## Repairs
+## Root cause and repair
 
-- Added a migrated SQLite store for temporary rooms and limiter buckets.
-  Production defaults to `/data/relay.sqlite3`; local execution
-  falls back beside the binary. Active room codes survive restart and expire
-  after two hours. Stale companion leases are released at startup.
-- Configured SQLite with a full-synchronous rollback journal and a 30-second
-  busy timeout. WAL shared-memory files are unsafe on the Azure Files SMB
-  mount. Because the mount also rejects SQLite's advisory locks, `/data` uses
-  the `unix-none` VFS with one connection, and deployment stops every old
-  revision before starting its successor. That three-part invariant prevents
-  concurrent writers.
-  The repaired store uses a clean `relay.sqlite3`; the unusable WAL database
-  created by the blocked first rollout never served traffic and is ignored.
-- Made the exact 40-request window one atomic SQLite upsert. Request arrival
-  time is captured before storage contention, so a simultaneous burst cannot
-  gain extra allowance while queued. All three room endpoints share it.
-- Kept WebSocket fan-out deliberately singleton and strengthened the guarded
-  deployment. It now renders the Azure Files mount, full-SHA image,
-  SHA-derived revision suffix, one-replica scale, and HTTP ingress. It also
-  removes the factory helper's legacy alias for the same mounted volume and
-  enforces stop-before-start for the single SQLite writer.
-- Extended live topology checks to require the `/data` volume on both the app
-  template and active revision.
-- Added regressions for shared room access across pools, shared rate limits
-  across three pools, restart continuity, TTL eviction, every API route,
-  30 fresh desktop-host/390 px companion rounds, response headers, and mobile
-  word integrity.
-- Reduced the mobile display size while retaining emergency wrapping for
-  200% text on longer legal headings.
-- Updated privacy, README, claims, copy audit, and screenshots for the durable
-  temporary-state contract.
+- The host updated its score before the score frame reached the companion.
+  The two screens therefore exposed different states during normal network
+  delay.
+- The companion now applies each score and sends a validated `score_ack`. The
+  host displays that score only after the acknowledgement matches its pending
+  round and tap count.
+- Tap messages carry a round and tap identifier. The host rejects stale and
+  duplicate taps.
+- Host and companion sockets reconnect automatically. The server sends an
+  initial peer-presence snapshot, keeps reconnect tokens across restarts, and
+  lets an inactive room accept a replacement companion.
+- When a companion reconnects during a round, the host replays the active
+  round and latest pending score. A lost score frame therefore converges.
+- The 30-round local and live probes force a host reconnect, delay and discard
+  the first companion score frame, then require a non-zero matching score in
+  every fresh desktop/390 px pair.
 
 ## Verification evidence
 
-- Clean install: `npm ci` — 59 packages, 0 vulnerabilities.
-- Full gate: `npm test` — 3 Vitest tests, 14 Rust tests, release/deployment/
-  handoff contracts, 2 clean-entrypoint checks, then 37 Playwright checks
-  passed with 3 intentional project skips.
-- The Azure Files regression holds an exclusive rollback-journal lock, proves
-  incoming startup waits for its release, asserts `journal_mode=delete`, and
-  exercises the release SQLite build through the `unix-none` VFS.
-- Live durability: `npm run test:live-persistence` created a room, restarted
-  the active revision onto a different replica, and joined the same room from
-  the persisted database.
-- The 30-round browser probe waits for the asynchronous room create to replace
-  its six-dot loading placeholder before reading the code; this covers the
-  real Azure Files latency observed during release.
-- Formatting and lint: `cargo fmt --check` and
-  `cargo clippy --all-targets --all-features -- -D warnings` passed.
-- Production builds: `npm run build` and `cargo build --release --locked`
-  passed. Output is 24,403 B JavaScript and 17,506 B CSS; the mobile hero is
-  26,186 B.
-- Exact local relay: `RELAY_BASE_URL=http://127.0.0.1:18080 RELAY_ROUNDS=30
-  npm run test:live-relay` passed 30/30 API create→join checks and 30/30 fresh
-  desktop-host/390 px companion WebSocket rounds.
-- Exact local rate limit: five fresh client identities each received 40 × 200
-  and 5 × 429 with `Retry-After: 1`.
-- Load smoke: 100 concurrent creates from distinct clients returned 100 × 200
-  in 191 ms.
-- Browser coverage includes desktop and 390 px mobile, keyboard-only recovery,
-  Axe serious/critical scans, 200% text, 44 px touch targets, reduced motion,
-  no third-party requests, local-only audio, offline service-worker reload,
-  update activation, and response/cache policies.
-- Fresh screenshots: [desktop](evidence/screenshot-desktop.png) and
-  [390 px mobile](evidence/screenshot-mobile.png). Both had one H1, one main,
-  no console errors, no third-party requests, and no split headline words.
+- Clean dependency install: `npm ci` — 59 packages, 0 vulnerabilities.
+- Full gate: `npm test` passed in 3.3 minutes — 3 Vitest tests, 14 Rust tests,
+  release/deployment/handoff contracts, clean-entrypoint checks, and 37
+  Playwright checks passed with 3 intentional project skips.
+- All 13 non-live commands in `.factory/claims.json` passed exactly as listed
+  after the clean install. The 60-second claim was measured independently.
+- Formatting and lint: `cargo fmt --all -- --check` and strict locked Clippy
+  passed. `cargo build --release --locked` passed.
+- Exact local live-equivalent probe: 30/30 fresh API rooms and 30/30 fresh
+  desktop-host/390 px companion pairs passed after forced host reconnect,
+  delayed score loss, and forced companion reconnect.
+- Five local rate probes each returned exactly 40 × 200 and 5 × 429 with
+  `Retry-After: 1`.
+- Minimal runtime: the release binary started with only `PORT=18080`, reported
+  its default SQLite path, served UI/API/health, and stopped on SIGINT.
+- Load smoke: 100 concurrent creates with separate client identities returned
+  100 × 200 in 1,394 ms.
+- Production bundle: JavaScript 25,629 bytes raw / 8,658 bytes gzip; CSS 17,506
+  bytes raw / 4,603 bytes gzip. The first-load budgets remain well below the
+  product limits.
+- Browser coverage includes desktop and 390 px mobile, keyboard recovery,
+  Axe scans on all routes, 200% text, 44 px touch targets, reduced motion,
+  local-only audio, same-origin privacy, offline reload, response/cache policy,
+  and zero normal-flow console errors.
+- Fresh screenshots: `evidence/repair-22/desktop.png` and
+  `evidence/repair-22/mobile.png`. Visual review found no overflow, clipping,
+  or loading error.
 - Lighthouse 12.8.2 mobile: performance 100, accessibility 100, best practices
-  100, SEO 100; FCP 1.1 s, LCP 1.7 s, TBT 30 ms, CLS 0, transfer 168 KiB.
-- Minimal environment: the release binary started with only `PORT=18080`,
-  defaulted SQLite beside the binary, served health/API/UI, and shut down on
-  SIGINT without a secret.
+  100, SEO 100; FCP 1.1 s, LCP 1.7 s, TBT 0 ms, CLS 0.
 
-## Release and live proof
+## Scoped deployment and live proof
 
-The final handoff commit is deployed only with:
+The first guarded rollout of this repair is run from this committed handoff.
+It builds through ACR, touches only `sf-haptic-beat-relay`, preserves the
+existing one-replica `/data` topology, and runs every live gate below. Final
+topology, identity, persistence, 30-round, rate-limit, and browser evidence is
+added after that rollout.
+
+## Release command
+
+The guarded command deploys only the configured product and refuses a dirty or
+unpushed tree:
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
@@ -118,13 +93,8 @@ RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 ```
 
-The deploy command itself repeats topology after a reconciliation window. It
-fails unless the active full-SHA revision has HTTP ingress, one ready replica,
-the configured `/data` mount, a room survives a live replica restart, 30
-stable rounds, and five exact 40/5 bursts.
-
 ## Known gaps
 
-- Docker is not installed in this worker. The Dockerfile contract passed
-  locally, and the ACR multi-stage build passed as the container build gate.
+- Docker is unavailable in this worker. The Dockerfile contract, local release
+  binary, and factory ACR build cover the container path.
 - Package/consumer checks do not apply to this backend web application.

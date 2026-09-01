@@ -1,0 +1,2 @@
+{"name":"desktop","title":"Haptic Beat Relay — send tactile beat cues","faults":[],"width":1440}
+{"name":"mobile","title":"Demo — Haptic Beat Relay","faults":[],"width":390}

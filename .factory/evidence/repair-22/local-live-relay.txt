@@ -1,0 +1,5 @@
+
+> haptic-beat-relay@1.0.0 test:live-relay
+> node scripts/verify-live-relay.mjs
+
+live relay regression passed: 30/30 fresh API create→join checks and 30/30 delayed-score desktop-host + 390px-companion rounds with host and companion reconnection at http://127.0.0.1:18080

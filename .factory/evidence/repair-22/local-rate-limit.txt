@@ -1,0 +1,5 @@
+
+> haptic-beat-relay@1.0.0 test:live-rate-limit
+> node scripts/verify-live-rate-limit.mjs
+
+{"baseURL":"http://127.0.0.1:18080","repetitions":5,"results":[{"client":"198.51.100.113","accepted":40,"limited":5,"retryAfter":"1"},{"client":"198.51.100.81","accepted":40,"limited":5,"retryAfter":"1"},{"client":"198.51.100.148","accepted":40,"limited":5,"retryAfter":"1"},{"client":"198.51.100.150","accepted":40,"limited":5,"retryAfter":"1"},{"client":"198.51.100.100","accepted":40,"limited":5,"retryAfter":"1"}]}

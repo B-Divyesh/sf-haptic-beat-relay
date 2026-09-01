@@ -1,0 +1,2 @@
+{"hostScore":"40%","companionScore":"0%"}
+{"hostScore":"40%","companionScore":"40%"}
