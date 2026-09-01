@@ -52,7 +52,7 @@ const pageTitles: Record<string, string> = {
 };
 
 const pageDescriptions: Record<string, string> = {
-  '/': 'Send a beat loop to one phone for vibration cues, returned taps, and a shared timing score.',
+  '/': 'Send a beat to one phone for vibration cues, returned taps, and a shared timing score.',
   '/demo': 'Try a paired sample beat round with returned taps and a shared score.',
   '/host': 'Open a room, set the tempo, and send beat cues to one friend.',
   '/join': 'Join a friend’s room to receive beat cues and tap them back.',
@@ -85,7 +85,7 @@ function header(): string {
 function footer(): string {
   return `
     <footer class="site-footer">
-      <p>Send tactile beat cues between two devices.</p>
+      <p>Send beat cues between two devices.</p>
       <nav aria-label="Footer navigation">
         <a href="/privacy" data-route>Privacy</a>
         <a href="/terms" data-route>Terms</a>
@@ -109,7 +109,7 @@ function landingPage(): string {
         <div class="hero-copy">
           <p class="eyebrow">One host · one friend · one beat</p>
           <h1 id="hero-title" tabindex="-1">Send every beat to a friend</h1>
-          <p class="lede">For friends and rhythm-game makers who need tactile cues and shared timing without an account.</p>
+          <p class="lede">For friends and rhythm-game makers who need phone vibration cues and a shared timing score without an account.</p>
           <div class="hero-action-row">
             <a class="button primary" href="/?demo=1" data-route>Try it with sample data</a>
             <span>A paired sample round opens now.</span>
@@ -162,7 +162,7 @@ function landingPage(): string {
         <div class="prose">
           <p>Phone vibration and controller vibration vary by browser and device.</p>
           <p>The screen still flashes each cue when vibration is unavailable.</p>
-          <p>Rooms hold only live relay messages. Room records expire automatically after two hours.</p>
+          <p>Room records expire automatically after two hours.</p>
         </div>
       </section>
     </main>${footer()}`;
@@ -181,7 +181,7 @@ function hostPage(): string {
         <div><span id="code-label">Room code</span><strong id="room-code" aria-live="polite">······</strong></div>
         <button class="button secondary compact" id="copy-code" type="button" disabled>Copy room link</button>
       </section>
-      <p class="connection-state" id="connection-state" aria-live="polite"><span class="status-dot"></span> Opening a private room…</p>
+      <p class="connection-state" id="connection-state" aria-live="polite"><span class="status-dot"></span> Opening a room…</p>
       <div class="host-grid">
         <section class="controls-panel" aria-labelledby="setup-title">
           <h2 id="setup-title">Set the beat</h2>
@@ -189,7 +189,7 @@ function hostPage(): string {
           <input id="bpm" type="range" min="60" max="180" value="104" step="1" />
           <label class="file-control" for="audio-loop">Load an audio loop <span>Optional · stays on this device</span></label>
           <input id="audio-loop" type="file" accept="audio/*" />
-          <p class="file-name" id="file-name">Built-in click is ready.</p>
+          <p class="file-name" id="file-name">No audio loop selected.</p>
           <button class="button primary wide" id="start-round" type="button" disabled>Start 60-second round</button>
           <p class="control-help">The button activates when your friend joins.</p>
         </section>
@@ -220,7 +220,7 @@ function companionPage(code = ''): string {
     </form>` : `<section class="companion-stage" aria-labelledby="cue-title">
       <p class="connection-state" id="connection-state" aria-live="polite"><span class="status-dot"></span> Joining room ${code}…</p>
       <h2 id="cue-title">Tap when you feel the cue</h2>
-      <button class="tap-pad" id="tap-pad" type="button" disabled><span>Tap the beat</span><small>Space key also works</small></button>
+      <button class="tap-pad" id="tap-pad" type="button" disabled><span>Tap the beat</span><small>Press Space or tap</small></button>
       <div class="score-readout"><span>Shared accuracy</span><strong id="score-value">0%</strong></div>
       <div class="meter large" role="meter" aria-label="Shared accuracy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="score-meter" class="score-0"></span></div>
       <p class="round-state" id="round-state" aria-live="polite">Waiting for the host to start.</p>
@@ -242,7 +242,7 @@ function demoPage(): string {
       <div class="room-heading demo-heading">
         <p class="eyebrow">Sample host · paired with Sam</p>
         <h1 id="demo-title" tabindex="-1">Try a tactile beat round</h1>
-        <p>This sample uses a 104 BPM practice loop and realistic returned taps.</p>
+        <p>This sample sends cues at 104 BPM and shows Sam's returned taps.</p>
       </div>
       <section class="demo-live" aria-labelledby="sample-round-title">
         <div class="demo-live-top"><div><p class="eyebrow">Paired sample</p><h2 id="sample-round-title">Sam taps each cue back</h2></div><button class="button primary" id="demo-start" type="button">Start sample round</button></div>
@@ -267,13 +267,11 @@ function legalPage(kind: 'privacy' | 'terms'): string {
   return `${header()}<main id="main" class="legal-main"><article>
     <p class="eyebrow">${privacy ? 'Privacy' : 'Terms'}</p>
     <h1 tabindex="-1">${privacy ? 'How temporary rooms handle your data' : 'Terms for using Haptic Beat Relay'}</h1>
-    ${privacy ? `<h2>What the relay handles</h2>
-      <p>The server holds a room code, two random access tokens, and live timing messages.</p>
-      <p>SQLite stores room records for up to two hours. Active rooms survive a server restart.</p>
-      <p>The server keeps a client network address briefly to enforce request limits.</p>
+    ${privacy ? `<h2>Room data</h2>
+      <p>Room records expire after two hours. Active rooms can survive a server restart.</p>
       <p>Your audio loop stays inside the host browser. The relay never receives the file.</p>
-      <h2>What we do not collect</h2>
-      <p>There are no accounts, advertising trackers, or analytics scripts.</p>
+      <h2>Accounts and advertising</h2>
+      <p>There are no accounts or third-party advertising requests.</p>
       <h2>Questions</h2><p>Email <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p>` : `<h2>The service</h2>
       <p>Haptic Beat Relay is free software for small music and game sessions.</p>
       <p>Browser and device support can change how vibration and controller cues work.</p>

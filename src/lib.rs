@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env,
+    ffi::OsStr,
     net::{IpAddr, SocketAddr},
     path::{Path as FilePath, PathBuf},
     sync::Arc,
@@ -95,17 +96,25 @@ struct SocketQuery {
 }
 
 pub fn database_path() -> PathBuf {
-    if let Some(path) = env::var_os("RELAY_DATABASE_PATH") {
+    resolved_database_path(
+        env::var_os("RELAY_DATABASE_PATH").as_deref(),
+        FilePath::new("/data"),
+        env::current_exe().ok(),
+    )
+}
+
+fn resolved_database_path(
+    configured_path: Option<&OsStr>,
+    durable_directory: &FilePath,
+    executable_path: Option<PathBuf>,
+) -> PathBuf {
+    if let Some(path) = configured_path {
         return PathBuf::from(path);
     }
-
-    let durable_directory = FilePath::new("/data");
     if durable_directory.is_dir() {
         return durable_directory.join("relay.sqlite3");
     }
-
-    env::current_exe()
-        .ok()
+    executable_path
         .and_then(|path| path.parent().map(FilePath::to_path_buf))
         .unwrap_or_else(|| PathBuf::from("."))
         .join("relay.sqlite3")
@@ -1094,6 +1103,31 @@ mod tests {
             .unwrap()
     }
 
+    #[test]
+    // @claim:database-path
+    fn claim_database_path_uses_an_explicit_path_then_data_or_the_executable_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let durable = directory.path().join("data");
+        std::fs::create_dir(&durable).unwrap();
+        assert_eq!(
+            resolved_database_path(
+                Some(OsStr::new("/tmp/selected-relay.sqlite3")),
+                &durable,
+                Some(PathBuf::from("/tmp/relay/relay-server")),
+            ),
+            PathBuf::from("/tmp/selected-relay.sqlite3"),
+        );
+        assert_eq!(
+            resolved_database_path(None, &durable, Some(PathBuf::from("/tmp/relay/relay-server"))),
+            durable.join("relay.sqlite3"),
+        );
+        let missing = directory.path().join("missing-data");
+        assert_eq!(
+            resolved_database_path(None, &missing, Some(PathBuf::from("/tmp/relay/relay-server"))),
+            PathBuf::from("/tmp/relay/relay.sqlite3"),
+        );
+    }
+
     #[tokio::test]
     async fn creates_and_joins_a_room() {
         let (application, _storage) = isolated_app(ROOM_TTL).await;
@@ -1257,41 +1291,45 @@ mod tests {
     #[tokio::test]
     async fn rate_limit_uses_forwarded_client_ip() {
         let (application, _storage) = isolated_app(ROOM_TTL).await;
-        let mut last = StatusCode::OK;
-        for _ in 0..41 {
-            last = application
-                .clone()
-                .oneshot(
-                    Request::post("/api/rooms")
-                        .header("x-forwarded-for", "203.0.113.8")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap()
-                .status();
-        }
-        assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+        let responses = futures_util::future::join_all((0..41).map(|_| {
+            application.clone().oneshot(
+                Request::post("/api/rooms")
+                    .header("x-forwarded-for", "203.0.113.8")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        }))
+        .await;
+        assert_eq!(
+            responses
+                .into_iter()
+                .map(Result::unwrap)
+                .filter(|response| response.status() == StatusCode::TOO_MANY_REQUESTS)
+                .count(),
+            1,
+        );
     }
 
     #[tokio::test]
     async fn rate_limit_groups_forwarded_ip_addresses_despite_changing_ports() {
         let (application, _storage) = isolated_app(ROOM_TTL).await;
-        let mut last = StatusCode::OK;
-        for port in 40_000..40_041 {
-            last = application
-                .clone()
-                .oneshot(
-                    Request::post("/api/rooms")
-                        .header("x-forwarded-for", format!("203.0.113.9:{port}"))
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap()
-                .status();
-        }
-        assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+        let responses = futures_util::future::join_all((40_000..40_041).map(|port| {
+            application.clone().oneshot(
+                Request::post("/api/rooms")
+                    .header("x-forwarded-for", format!("203.0.113.9:{port}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        }))
+        .await;
+        assert_eq!(
+            responses
+                .into_iter()
+                .map(Result::unwrap)
+                .filter(|response| response.status() == StatusCode::TOO_MANY_REQUESTS)
+                .count(),
+            1,
+        );
     }
 
     #[tokio::test]
@@ -1319,22 +1357,23 @@ mod tests {
     #[tokio::test]
     async fn rate_limit_returns_retry_after_after_exactly_40_requests_per_client() {
         let (application, _storage) = isolated_app(ROOM_TTL).await;
-        let mut statuses = Vec::new();
-        let mut retry_after = Vec::new();
-        for _ in 0..45 {
-            let response = application
-                .clone()
-                .oneshot(
-                    Request::post("/api/rooms")
-                        .header("x-forwarded-for", "198.51.100.45")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            statuses.push(response.status());
-            retry_after.push(response.headers().get(header::RETRY_AFTER).cloned());
-        }
+        let responses = futures_util::future::join_all((0..45).map(|_| {
+            application.clone().oneshot(
+                Request::post("/api/rooms")
+                    .header("x-forwarded-for", "198.51.100.45")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        }))
+        .await;
+        let statuses: Vec<StatusCode> = responses
+            .iter()
+            .map(|response| response.as_ref().unwrap().status())
+            .collect();
+        let retry_after: Vec<Option<HeaderValue>> = responses
+            .iter()
+            .map(|response| response.as_ref().unwrap().headers().get(header::RETRY_AFTER).cloned())
+            .collect();
         assert_eq!(
             statuses
                 .iter()

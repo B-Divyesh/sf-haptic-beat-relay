@@ -14,6 +14,13 @@
     "sandbox": "fresh browser context at /?demo=1; start the sample, verify it remains active before completion, then observe its 12-second completion"
   },
   {
+    "id": "sample-tempo",
+    "claim": "The sample sends cues at 104 BPM.",
+    "where": "demo introduction and sample setup",
+    "test": "npm run test:browser -- --grep @claim:sample-tempo",
+    "sandbox": "fresh browser context at /?demo=1; record three sample cue updates and measure the two 60,000/104 ms intervals"
+  },
+  {
     "id": "local-audio",
     "claim": "The audio loop stays on the host device.",
     "where": "landing facts, host file picker, privacy, README",
@@ -40,6 +47,13 @@
     "where": "landing facts, terms, README",
     "test": "npm run test:browser -- --grep @claim:free-use",
     "sandbox": "fresh browser context; create a room and assert no purchase or payment gate appears"
+  },
+  {
+    "id": "copy-room-link",
+    "claim": "Copy room link copies a usable friend join URL and explains a blocked clipboard.",
+    "where": "host room action",
+    "test": "npm run test:browser -- --grep @claim:copy-room-link",
+    "sandbox": "fresh host browser context with clipboard permission; copy the link, open it in a fresh friend context, then verify the blocked-clipboard message in a separate context"
   },
   {
     "id": "shared-score",
@@ -91,6 +105,13 @@
     "sandbox": "two fresh browser contexts with vibration unavailable; relay one cue and assert the friend tap pad enters its visual cue state"
   },
   {
+    "id": "space-key-tap",
+    "claim": "A friend can press Space to return a tap during a round.",
+    "where": "joined friend tap pad",
+    "test": "npm run test:browser -- --grep @claim:space-key-tap",
+    "sandbox": "two fresh browser contexts; create and join one room, start a round, focus the tap pad, press Space, and observe one returned tap on the host"
+  },
+  {
     "id": "haptic-output",
     "claim": "Each friend cue uses phone vibration and connected controller haptics when the browser supports them.",
     "where": "landing, live friend view, terms, README",
@@ -110,5 +131,12 @@
     "where": "README deployment and privacy sections",
     "test": "npm run test:live-topology",
     "sandbox": "read-only Azure queries; assert the /data volume, one active revision, min/max one, HTTP ingress, one ready replica, full-SHA image, and matching live health identity"
+  },
+  {
+    "id": "database-path",
+    "claim": "RELAY_DATABASE_PATH selects the SQLite file; otherwise the relay uses /data or its executable directory.",
+    "where": "README local run",
+    "test": "cargo test claim_database_path_uses_an_explicit_path_then_data_or_the_executable_directory",
+    "sandbox": "temporary directories; assert configured, durable-data, and executable-directory path selection without changing process environment"
   }
 ]

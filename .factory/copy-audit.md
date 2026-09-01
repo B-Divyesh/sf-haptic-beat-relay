@@ -1,7 +1,7 @@
-# Copy audit — repair 23
+# Copy audit — polish 2
 
-Counts use Unicode word tokens. Code commands are excluded. No audited sentence
-exceeds 22 words. No banned marketing term appears.
+Counts use visible Unicode word tokens. Commands and generated room codes are
+excluded. No sentence exceeds 22 words. No banned marketing word appears.
 
 ## Landing page
 
@@ -9,39 +9,50 @@ exceeds 22 words. No banned marketing term appears.
 |---|---:|---|
 | Skip to main content | 4 | link |
 | Haptic Beat Relay | 3 | wordmark |
-| Demo | 1 | navigation |
-| Join | 1 | navigation |
-| Privacy | 1 | navigation |
-| One host · one friend · one beat | 7 | label |
+| Demo | 1 | nav |
+| Join | 1 | nav |
+| Privacy | 1 | nav |
+| One host · one friend · one beat | 6 | label |
 | Send every beat to a friend | 6 | h1 |
-| For friends and rhythm-game makers who need tactile cues and shared timing without an account. | 15 | sentence |
+| For friends and rhythm-game makers who need phone vibration cues and a shared timing score without an account. | 19 | audience |
 | Try it with sample data | 5 | action |
-| A paired sample round opens now. | 6 | sentence |
+| A paired sample round opens now. | 6 | action help |
 | Create a real room | 4 | action |
 | Free to use | 3 | fact |
 | Audio loops stay on the host device | 7 | fact |
 | The relay needs a connection | 5 | fact |
 | One device sends the pulse. The other taps it back. | 10 | art caption |
 | See the same round on both devices | 7 | h2 |
-| The host sets the pace. Your friend feels each cue and taps the beat back. | 14 | sentence |
-| Paired with your friend | 4 | status |
-| Shared accuracy | 2 | label |
+| The host sets the pace. Your friend feels each cue and taps the beat back. | 14 | preview text |
+| Paired with your friend | 4 | preview state |
+| Shared accuracy | 2 | preview label |
 | Run a round in three steps | 6 | h2 |
-| Share its six-character code with one friend. | 7 | sentence |
-| Choose the tempo or load an audio loop from your device. | 11 | sentence |
-| Your friend feels each cue and builds a shared score. | 10 | sentence |
+| Create a room. | 3 | step |
+| Share its six-character code with one friend. | 7 | step text |
+| Set the beat. | 3 | step |
+| Choose the tempo or load an audio loop from your device. | 11 | step text |
+| Tap it back. | 3 | step |
+| Your friend feels each cue and builds a shared score. | 10 | step text |
 | Vibration varies by browser and device | 6 | h2 |
-| Phone vibration and controller vibration vary by browser and device. | 10 | sentence |
-| The screen still flashes each cue when vibration is unavailable. | 10 | sentence |
-| Rooms hold only live relay messages. Room records expire automatically after two hours. | 13 | sentence |
-| Send tactile beat cues between two devices. | 7 | footer |
+| Phone vibration and controller vibration vary by browser and device. | 10 | limit |
+| The screen still flashes each cue when vibration is unavailable. | 10 | limit |
+| Room records expire automatically after two hours. | 7 | limit |
+| Send beat cues between two devices. | 6 | footer |
+| Terms | 1 | footer link |
+| Built by Param Factory | 4 | footer link |
+| Version 1.0 · Original generated environment art | 6 | footer note |
 
-## README
+## Demo and room pages
 
-README prose was rescanned after the durable reconnect repair. No prose sentence
-exceeds 22 words or contains a banned marketing word. It uses **friend** for
-the second participant, **audio loop** for local sound, and **room** for the
-temporary relay.
+| Copy | Words | Type |
+|---|---:|---|
+| Demo — sample data, nothing is saved | 6 | persistent banner |
+| Reset demo | 2 | action |
+| Create a real room | 4 | action |
+| This sample sends cues at 104 BPM and shows Sam's returned taps. | 12 | sample detail |
+| Copy room link | 3 | action |
+| No audio loop selected. | 5 | status |
+| Press Space or tap | 4 | keyboard help |
 
 ## Terminology
 
@@ -50,5 +61,10 @@ temporary relay.
 | Second participant | friend |
 | Selected local sound | audio loop |
 | Temporary connection | room |
-| Returned timing measure | shared accuracy |
+| Returned timing measure | shared timing score |
 | One-click sandbox | sample |
+
+## README
+
+README prose has 30 sentences and 258 words. Its average is 8.6 words. No
+sentence exceeds 22 words. It uses the same terms as the product.

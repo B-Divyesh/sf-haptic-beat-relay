@@ -4,17 +4,15 @@ Haptic Beat Relay sends a host's beat to one friend's device. Your friend feels
 each cue, taps back, and builds a shared accuracy score.
 
 It is for friends, music practice, and small rhythm-game prototypes. No account
-is needed. It is free to use. Audio loops stay in the host browser. The server
-relays temporary room and timing messages.
+is needed. It is free to use. Audio loops stay in the host browser.
 
 Live site: <https://haptic-beat-relay.sociobot.in>
 
 ## Try the sample
 
 Open <http://localhost:8080/?demo=1> after starting the app. The paired sample
-shows Sam's returned taps and shared score immediately. Start the 12-second
-sample round, reset it, or create a real room. Sample state stays in page
-memory and is discarded on reset.
+shows Sam's returned taps and shared score immediately. It sends cues at 104
+BPM. Start the 12-second sample round, reset it, or create a real room.
 
 ## Run locally
 
@@ -24,14 +22,9 @@ npm run build
 cargo run
 ```
 
-Open <http://localhost:8080>. For frontend work, run `npm run dev` while the
-backend runs in another terminal.
-
-The container stores SQLite at `/data/relay.sqlite3`. A local run
-uses `/data` when present, then falls back beside the executable. Set
-`RELAY_DATABASE_PATH` only when a different local test path is needed. The
-release command stops the previous singleton revision before starting the next
-one because the Azure Files database uses SQLite's no-lock Unix VFS.
+Open <http://localhost:8080>. For frontend work, run `npm run dev` in another
+terminal. Set `RELAY_DATABASE_PATH` to choose a different local database path.
+Otherwise, the relay uses `/data` or its executable directory.
 
 ## Test
 
@@ -45,35 +38,23 @@ Run every public claim from the manifest after a clean install:
 node -e "for (const c of require('./.factory/claims.json')) console.log(c.test)"
 ```
 
-The real connected-round check takes about one minute:
-
-```sh
-npm run test:browser -- --grep @claim:real-round-duration
-```
-
 Check the live service with:
 
 ```sh
 RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
-npm run test:live-topology
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
-
-The 30-round relay check reconnects both devices, drops one delayed score
-frame, and requires persisted score state on both peers.
 
 ## How it works
 
 - The host opens a room and gets a six-character code.
 - One friend joins with that code.
-- A WebSocket relays beat, tap, presence, score, and score acknowledgement messages.
-- Both devices reconnect automatically and restore the active round and score.
+- Both devices reconnect and recover the shared score.
 - The friend receives phone and controller vibration when supported.
 - The screen flashes each cue when vibration is unavailable.
 
-Rooms expire after two hours. SQLite stores temporary room, round, score, and
-rate-limit records under `/data`, so active rooms survive a restart. The live
-relay uses one Container App replica because WebSocket delivery is process-local.
+Room records expire after two hours.
 
 ## Container
 
@@ -90,12 +71,6 @@ Finish the handoff, commit it, push it, then run:
 ```sh
 npm run deploy -- <full-git-sha>
 ```
-
-This command is required for this product. It reads
-`deploy/containerapp.json`, mounts durable storage at `/data`, pins HTTP
-ingress and one ready replica, and checks the live room relay before it
-returns. Do not use a generic rollout. Its Auto ingress and 1–3 replica
-defaults split live WebSocket delivery.
 
 ## Project records
 

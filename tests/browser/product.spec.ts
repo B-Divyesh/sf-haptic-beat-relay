@@ -1,6 +1,8 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+const testBuildSha = '0123456789abcdef0123456789abcdef01234567';
+
 // The product keys limits by the first forwarded client address. Give each
 // browser test a stable, separate identity so a claim's intentional 45-request
 // burst cannot spend the allowance used by an unrelated test or viewport.
@@ -113,6 +115,29 @@ test('@claim:demo-sandbox @claim:sample-duration sample round starts in one clic
   await expect(page.locator('#score-value')).toHaveText('86%');
 });
 
+test('@claim:sample-tempo sample cues arrive at 104 BPM', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'One timed browser run measures the shipped sample tempo.');
+  await page.goto('/?demo=1');
+  const marks = page.evaluate(() => new Promise<number[]>((resolve) => {
+    const target = document.querySelector('#tap-count')!;
+    const observed: number[] = [];
+    const observer = new MutationObserver(() => {
+      observed.push(performance.now());
+      if (observed.length === 3) {
+        observer.disconnect();
+        resolve(observed);
+      }
+    });
+    observer.observe(target, { childList: true, characterData: true, subtree: true });
+  }));
+  await page.getByRole('button', { name: 'Start sample round' }).click();
+  const observed = await marks;
+  const expectedInterval = 60_000 / 104;
+  for (const interval of [observed[1] - observed[0], observed[2] - observed[1]]) {
+    expect(Math.abs(interval - expectedInterval)).toBeLessThan(100);
+  }
+});
+
 test('@claim:local-audio and @claim:no-third-party uploaded audio stays in the host browser', async ({ page }) => {
   const requests: Array<{ url: string; method: string; body: string | null }> = [];
   page.on('request', (request) => requests.push({ url: request.url(), method: request.method(), body: request.postData() }));
@@ -150,7 +175,7 @@ test('local API bursts enforce exactly 40 requests and return Retry-After', asyn
 test('@claim:health health endpoint returns the build identity', async ({ request }) => {
   const response = await request.get('/health');
   expect(response.ok()).toBe(true);
-  expect(await response.json()).toMatchObject({ status: 'ok', build_sha: expect.any(String) });
+  expect(await response.json()).toEqual({ status: 'ok', build_sha: testBuildSha });
 });
 
 test('response policy protects HTML, API errors, and immutable assets', async ({ request }) => {
@@ -186,6 +211,39 @@ test('@claim:no-account and @claim:free-use host flow has no sign-in or payment 
   await expect(page.locator('a[href*="pay"], a[href*="checkout"], button:has-text("Buy")')).toHaveCount(0);
 });
 
+test('@claim:copy-room-link copies a usable room URL and names a blocked-copy fallback', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'One browser run verifies clipboard success and fallback.');
+  const hostContext = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '198.18.87.45' } });
+  await hostContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:8080' });
+  const host = await hostContext.newPage();
+  await host.goto('/host');
+  await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/);
+  const code = await host.locator('#room-code').textContent();
+  expect(code).toMatch(/^[A-Z0-9]{6}$/);
+  await host.getByRole('button', { name: 'Copy room link' }).click();
+  await expect(host.getByRole('button', { name: 'Room link copied' })).toBeVisible();
+  const copied = await host.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toBe(`http://127.0.0.1:8080/join/${code}`);
+  const joinContext = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '198.18.88.45' } });
+  const join = await joinContext.newPage();
+  await join.goto(copied);
+  await expect(join.getByRole('heading', { level: 1 })).toHaveText('Join a friend’s beat room');
+  await expect(join.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+  await hostContext.close();
+  await joinContext.close();
+
+  const blockedContext = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '198.18.89.45' } });
+  await blockedContext.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+  });
+  const blocked = await blockedContext.newPage();
+  await blocked.goto('/host');
+  await expect(blocked.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/);
+  await blocked.getByRole('button', { name: 'Copy room link' }).click();
+  await expect(blocked.getByRole('button', { name: 'Copy blocked — share the code' })).toBeVisible();
+  await blockedContext.close();
+});
+
 test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue, and returns a scored tap', async ({ browser }) => {
   const hostContext = await browser.newContext();
   const companionContext = await browser.newContext();
@@ -211,6 +269,27 @@ test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue,
   await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
   await expect(host.locator('#score-value')).toHaveAttribute('data-taps', '1');
   await expect(companion.locator('#score-value')).toHaveText(await host.locator('#score-value').textContent() ?? '0%');
+  await hostContext.close();
+  await companionContext.close();
+});
+
+test('@claim:space-key-tap Space returns a tap in a joined room', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'One paired browser run proves the keyboard shortcut.');
+  const hostContext = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '198.18.90.45' } });
+  const companionContext = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '198.18.91.45' } });
+  const host = await hostContext.newPage();
+  const companion = await companionContext.newPage();
+  await host.goto('/host');
+  const code = await host.locator('#room-code').textContent();
+  expect(code).toMatch(/^[A-Z0-9]{6}$/);
+  await companion.goto(`/join/${code}`);
+  await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+  await host.getByRole('button', { name: 'Start 60-second round' }).click();
+  const pad = companion.getByRole('button', { name: /Tap the beat/ });
+  await expect(pad).toBeEnabled();
+  await pad.focus();
+  await companion.keyboard.press('Space');
+  await expect(host.locator('#tap-count')).toHaveText('1 returned tap.');
   await hostContext.close();
   await companionContext.close();
 });

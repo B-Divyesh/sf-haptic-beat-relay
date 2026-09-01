@@ -1,1 +1,1 @@
-Send tactile beat cues to a friend's phone and score the taps they send back.
+Send phone vibration cues to a friend and score the taps they send back.
