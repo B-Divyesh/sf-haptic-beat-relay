@@ -1,0 +1,536 @@
+{
+  "checkedAt": "2026-09-01T23:16:57.324Z",
+  "origin": "https://haptic-beat-relay.sociobot.in",
+  "viewports": {
+    "mobile": {
+      "status": 200,
+      "title": "Haptic Beat Relay — send tactile beat cues",
+      "h1Count": 1,
+      "mainCount": 1,
+      "visibleText": [
+        {
+          "text": "Haptic Beat Relay",
+          "top": 8,
+          "bottom": 60
+        },
+        {
+          "text": "Join",
+          "top": 98,
+          "bottom": 114
+        },
+        {
+          "text": "Privacy",
+          "top": 98,
+          "bottom": 114
+        },
+        {
+          "text": "One host · one friend · one beat",
+          "top": 157,
+          "bottom": 172
+        },
+        {
+          "text": "Send every beat to a friend",
+          "top": 184,
+          "bottom": 336
+        },
+        {
+          "text": "For friends and rhythm-game makers who need tactile cues and shared timing without an account.",
+          "top": 347,
+          "bottom": 422
+        },
+        {
+          "text": "Try it with sample data",
+          "top": 458,
+          "bottom": 477
+        },
+        {
+          "text": "A paired sample round opens now.",
+          "top": 509,
+          "bottom": 525
+        },
+        {
+          "text": "Create a real room",
+          "top": 554,
+          "bottom": 573
+        },
+        {
+          "text": "01",
+          "top": 614,
+          "bottom": 628
+        },
+        {
+          "text": "Free to use",
+          "top": 632,
+          "bottom": 646
+        },
+        {
+          "text": "02",
+          "top": 614,
+          "bottom": 628
+        },
+        {
+          "text": "Audio loops stay on the host device",
+          "top": 632,
+          "bottom": 665
+        },
+        {
+          "text": "03",
+          "top": 614,
+          "bottom": 628
+        },
+        {
+          "text": "The relay needs a connection",
+          "top": 632,
+          "bottom": 665
+        }
+      ],
+      "essentials": {
+        "h1": {
+          "text": "SEND EVERY BEAT TO A FRIEND",
+          "box": {
+            "x": 12,
+            "y": 188.75,
+            "width": 366,
+            "height": 142.96875
+          }
+        },
+        "audience": {
+          "text": "For friends and rhythm-game makers who need tactile cues and shared timing without an account.",
+          "box": {
+            "x": 12,
+            "y": 343.71875,
+            "width": 366,
+            "height": 82.921875
+          }
+        },
+        "sample": {
+          "text": "Try it with sample data",
+          "box": {
+            "x": 12,
+            "y": 442.640625,
+            "width": 249.671875,
+            "height": 49.59375
+          }
+        },
+        "facts": {
+          "text": "01\nFree to use\n02\nAudio loops stay on the host device\n03\nThe relay needs a connection",
+          "box": {
+            "x": 12,
+            "y": 604.828125,
+            "width": 366,
+            "height": 62.265625
+          }
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "requests": [
+        "https://haptic-beat-relay.sociobot.in/",
+        "https://haptic-beat-relay.sociobot.in/assets/index-D4VZmTzW.js",
+        "https://haptic-beat-relay.sociobot.in/assets/index-CwpWePst.css",
+        "https://haptic-beat-relay.sociobot.in/art/relay-clearing-720.webp",
+        "https://haptic-beat-relay.sociobot.in/favicon.svg"
+      ]
+    },
+    "desktop": {
+      "status": 200,
+      "title": "Haptic Beat Relay — send tactile beat cues",
+      "h1Count": 1,
+      "mainCount": 1,
+      "visibleText": [
+        {
+          "text": "Haptic Beat Relay",
+          "top": 27,
+          "bottom": 44
+        },
+        {
+          "text": "Demo",
+          "top": 25,
+          "bottom": 44
+        },
+        {
+          "text": "Join",
+          "top": 25,
+          "bottom": 44
+        },
+        {
+          "text": "Privacy",
+          "top": 25,
+          "bottom": 44
+        },
+        {
+          "text": "One host · one friend · one beat",
+          "top": 119,
+          "bottom": 134
+        },
+        {
+          "text": "Send every beat to a friend",
+          "top": 142,
+          "bottom": 538
+        },
+        {
+          "text": "For friends and rhythm-game makers who need tactile cues and shared timing without an account.",
+          "top": 558,
+          "bottom": 617
+        },
+        {
+          "text": "Try it with sample data",
+          "top": 670,
+          "bottom": 689
+        },
+        {
+          "text": "A paired sample round opens now.",
+          "top": 662,
+          "bottom": 697
+        },
+        {
+          "text": "Create a real room",
+          "top": 736,
+          "bottom": 755
+        },
+        {
+          "text": "01",
+          "top": 822,
+          "bottom": 837
+        },
+        {
+          "text": "Free to use",
+          "top": 844,
+          "bottom": 859
+        },
+        {
+          "text": "02",
+          "top": 822,
+          "bottom": 837
+        },
+        {
+          "text": "Audio loops stay on the host device",
+          "top": 844,
+          "bottom": 880
+        },
+        {
+          "text": "03",
+          "top": 822,
+          "bottom": 837
+        },
+        {
+          "text": "The relay needs a connection",
+          "top": 844,
+          "bottom": 880
+        },
+        {
+          "text": "One device sends the pulse. The other taps it back.",
+          "top": 719,
+          "bottom": 734
+        }
+      ],
+      "essentials": {
+        "h1": {
+          "text": "SEND EVERY BEAT TO A FRIEND",
+          "box": {
+            "x": 120,
+            "y": 150.96875,
+            "width": 630,
+            "height": 378.9375
+          }
+        },
+        "audience": {
+          "text": "For friends and rhythm-game makers who need tactile cues and shared timing without an account.",
+          "box": {
+            "x": 120,
+            "y": 553.90625,
+            "width": 604.484375,
+            "height": 69.09375
+          }
+        },
+        "sample": {
+          "text": "Try it with sample data",
+          "box": {
+            "x": 120,
+            "y": 655,
+            "width": 249.671875,
+            "height": 49.59375
+          }
+        },
+        "facts": {
+          "text": "01\nFree to use\n02\nAudio loops stay on the host device\n03\nThe relay needs a connection",
+          "box": {
+            "x": 120,
+            "y": 810.1875,
+            "width": 630,
+            "height": 73.5
+          }
+        }
+      },
+      "consoleErrors": [],
+      "pageErrors": [],
+      "requests": [
+        "https://haptic-beat-relay.sociobot.in/",
+        "https://haptic-beat-relay.sociobot.in/assets/index-D4VZmTzW.js",
+        "https://haptic-beat-relay.sociobot.in/assets/index-CwpWePst.css",
+        "https://haptic-beat-relay.sociobot.in/art/relay-clearing-1280.webp",
+        "https://haptic-beat-relay.sociobot.in/favicon.svg",
+        "https://haptic-beat-relay.sociobot.in/art/relay-clearing-720.webp"
+      ]
+    }
+  },
+  "routes": [
+    {
+      "route": "/",
+      "status": 200,
+      "url": "https://haptic-beat-relay.sociobot.in/",
+      "title": "Haptic Beat Relay — send tactile beat cues",
+      "h1": [
+        "SEND EVERY BEAT TO A FRIEND"
+      ],
+      "description": "Send a beat loop to one phone for vibration cues, returned taps, and a shared timing score.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/",
+      "ogTitle": "Haptic Beat Relay — send tactile beat cues",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": []
+    },
+    {
+      "route": "/demo",
+      "status": 200,
+      "url": "https://haptic-beat-relay.sociobot.in/demo",
+      "title": "Demo — Haptic Beat Relay",
+      "h1": [
+        "TRY A TACTILE BEAT ROUND"
+      ],
+      "description": "Try a paired sample beat round with returned taps and a shared score.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/demo",
+      "ogTitle": "Demo — Haptic Beat Relay",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": []
+    },
+    {
+      "route": "/host",
+      "status": 200,
+      "url": "https://haptic-beat-relay.sociobot.in/host",
+      "title": "Host a round — Haptic Beat Relay",
+      "h1": [
+        "HOST A TACTILE BEAT ROUND"
+      ],
+      "description": "Open a room, set the tempo, and send beat cues to one friend.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/host",
+      "ogTitle": "Host a round — Haptic Beat Relay",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": []
+    },
+    {
+      "route": "/join",
+      "status": 200,
+      "url": "https://haptic-beat-relay.sociobot.in/join",
+      "title": "Join a room — Haptic Beat Relay",
+      "h1": [
+        "JOIN A FRIEND’S BEAT ROOM"
+      ],
+      "description": "Join a friend’s room to receive beat cues and tap them back.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/join",
+      "ogTitle": "Join a room — Haptic Beat Relay",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": []
+    },
+    {
+      "route": "/privacy",
+      "status": 200,
+      "url": "https://haptic-beat-relay.sociobot.in/privacy",
+      "title": "Privacy — Haptic Beat Relay",
+      "h1": [
+        "HOW TEMPORARY ROOMS HANDLE YOUR DATA"
+      ],
+      "description": "Read how temporary Haptic Beat Relay rooms handle data.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/privacy",
+      "ogTitle": "Privacy — Haptic Beat Relay",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": []
+    },
+    {
+      "route": "/terms",
+      "status": 200,
+      "url": "https://haptic-beat-relay.sociobot.in/terms",
+      "title": "Terms — Haptic Beat Relay",
+      "h1": [
+        "TERMS FOR USING HAPTIC BEAT RELAY"
+      ],
+      "description": "Read the terms for using Haptic Beat Relay.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/terms",
+      "ogTitle": "Terms — Haptic Beat Relay",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": []
+    },
+    {
+      "route": "/404",
+      "status": 404,
+      "url": "https://haptic-beat-relay.sociobot.in/404",
+      "title": "Page not found — Haptic Beat Relay",
+      "h1": [
+        "PAGE NOT FOUND"
+      ],
+      "description": "The requested Haptic Beat Relay page was not found.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/404",
+      "ogTitle": "Page not found — Haptic Beat Relay",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 ()"
+      ]
+    },
+    {
+      "route": "/definitely-missing-review-2",
+      "status": 404,
+      "url": "https://haptic-beat-relay.sociobot.in/definitely-missing-review-2",
+      "title": "Page not found — Haptic Beat Relay",
+      "h1": [
+        "PAGE NOT FOUND"
+      ],
+      "description": "The requested Haptic Beat Relay page was not found.",
+      "canonical": "https://haptic-beat-relay.sociobot.in/404",
+      "ogTitle": "Page not found — Haptic Beat Relay",
+      "footer": "Send tactile beat cues between two devices.\n\nPrivacy\nTerms\nBuilt by Param Factory\n(external site)\n\nVersion 1.0 · Original generated environment art",
+      "overflow": 0,
+      "axe": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 ()"
+      ]
+    }
+  ],
+  "crawl": [
+    {
+      "text": "Skip to main content",
+      "href": "https://haptic-beat-relay.sociobot.in/#main",
+      "status": 200,
+      "finalUrl": "https://haptic-beat-relay.sociobot.in/#main"
+    },
+    {
+      "text": "Haptic Beat Relay",
+      "href": "https://haptic-beat-relay.sociobot.in/",
+      "status": 200,
+      "finalUrl": "https://haptic-beat-relay.sociobot.in/"
+    },
+    {
+      "text": "Try it with sample data",
+      "href": "https://haptic-beat-relay.sociobot.in/?demo=1",
+      "status": 200,
+      "finalUrl": "https://haptic-beat-relay.sociobot.in/?demo=1"
+    },
+    {
+      "text": "Join",
+      "href": "https://haptic-beat-relay.sociobot.in/join",
+      "status": 200,
+      "finalUrl": "https://haptic-beat-relay.sociobot.in/join"
+    },
+    {
+      "text": "Privacy",
+      "href": "https://haptic-beat-relay.sociobot.in/privacy",
+      "status": 200,
+      "finalUrl": "https://haptic-beat-relay.sociobot.in/privacy"
+    },
+    {
+      "text": "Create a real room",
+      "href": "https://haptic-beat-relay.sociobot.in/host",
+      "status": 200,
+      "finalUrl": "https://haptic-beat-relay.sociobot.in/host"
+    },
+    {
+      "text": "Terms",
+      "href": "https://haptic-beat-relay.sociobot.in/terms",
+      "status": 200,
+      "finalUrl": "https://haptic-beat-relay.sociobot.in/terms"
+    },
+    {
+      "text": "Built by Param Factory (external site)",
+      "href": "https://sociobot.in/",
+      "status": 200,
+      "finalUrl": "https://sociobot.in/"
+    }
+  ],
+  "demo": {
+    "before": {
+      "url": "https://haptic-beat-relay.sociobot.in/?demo=1",
+      "title": "Demo — Haptic Beat Relay",
+      "h1": "TRY A TACTILE BEAT ROUND",
+      "banner": "Demo — sample data, nothing is saved\nReset demo\nCreate a real room",
+      "score": "86%",
+      "taps": "3 returned taps.",
+      "round": "Sam returned 3 taps in the last round.",
+      "startBox": {
+        "x": 28,
+        "y": 550.28125,
+        "width": 334,
+        "height": 49.59375
+      },
+      "scoreBox": {
+        "x": 275.546875,
+        "y": 744.46875,
+        "width": 86.453125,
+        "height": 34.5625
+      },
+      "storage": {
+        "local": {},
+        "session": {},
+        "indexedDB": "available"
+      }
+    },
+    "during": {
+      "button": "Sample round in progress",
+      "score": "88%",
+      "taps": "2 returned taps."
+    },
+    "reset": {
+      "score": "86%",
+      "taps": "3 returned taps.",
+      "round": "Sam returned 3 taps in the last round.",
+      "storage": {
+        "local": 0,
+        "session": 0
+      }
+    },
+    "requests": [
+      {
+        "url": "https://haptic-beat-relay.sociobot.in/",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "url": "https://haptic-beat-relay.sociobot.in/assets/index-D4VZmTzW.js",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "url": "https://haptic-beat-relay.sociobot.in/assets/index-CwpWePst.css",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "url": "https://haptic-beat-relay.sociobot.in/art/relay-clearing-720.webp",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "url": "https://haptic-beat-relay.sociobot.in/favicon.svg",
+        "method": "GET",
+        "body": null
+      }
+    ],
+    "consoleErrors": []
+  },
+  "history": {
+    "privacyFocus": "H1:How temporary rooms handle your data",
+    "backFocus": "H1:Send every beat to a friend",
+    "url": "https://haptic-beat-relay.sociobot.in/"
+  }
+}

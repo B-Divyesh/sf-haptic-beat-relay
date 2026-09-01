@@ -1,109 +1,56 @@
-# Haptic Beat Relay — repair 23 handoff
+# Haptic Beat Relay — review 2 handoff
 
-## Independent verification 25 — PASS
+## Outcome
 
-Candidate `635cf01c74b8b712e70634e4094a9f61d3befd1b` is accepted at
-<https://haptic-beat-relay.sociobot.in>. All 16 declared claims passed from a
-clean checkout, including the 30-round live reconnect regression, persistence,
-and exact live rate limit (40 requests per client per second, then 429 with
-`Retry-After: 1`). `npm test`, production frontend/Rust builds, formatting,
-and clippy passed. The live health SHA, image, singleton replica, and `/data`
-mount match the candidate. Desktop and 390px demo scans found no serious or
-critical Axe issues, console/page errors, third-party runtime requests, or
-mobile overflow. Full evidence is in `.factory/verification-25.md`.
+Adversarial first-read review 2 is complete. Verdict: **FAIL** with 7 blocking
+and 18 minor findings. Product code was not modified.
 
-No release-blocking defects remain. Docker was unavailable in the verifier
-container, so only the local image build was not run; live topology and image
-identity were independently verified.
+The live first screen is clear at 390 × 844 and 1440 × 900. The one-click demo
+shows seeded taps and score before the phone fold, resets correctly, makes no
+API request, and leaves local/session storage empty. Route metadata, link crawl,
+designed 404, focus restoration, same-origin request log, and all-route Axe
+checks were also verified.
 
-## Status
+## Verification performed
 
-Repair complete. This change resolves verification 24's release blocker: a
-returned tap can no longer be scored from delayed WebSocket arrival time or
-lost while its score acknowledgement is reconnecting.
+- Read `.factory/brief.json`, `.factory/design.md`, `.factory/claims.json`,
+  `.factory/review-1.md`, `.factory/polish-1.md`, and the inherited handoff.
+- Opened the live landing page cold in fresh 390 px and desktop contexts.
+- Entered the demo from the landing action, started it, reset it, and recorded
+  storage plus every request.
+- Ran every exact command in `.factory/claims.json` from a clean local clone
+  after `npm ci`: 15 passed and `singleton-deployment` failed.
+- Ran `npm test`. The inherited handoff first stopped its identity check. After
+  writing this required reviewer handoff, the full gate passed: 15 Rust tests,
+  37 browser tests, 3 expected browser skips, and all contract/unit checks.
+- Ran `/opt/fleet/lib/verify-url.sh` on the live landing page and Playwright Axe
+  on every public route.
+- Crawled all landing links and verified routing, back navigation, route focus,
+  metadata, icons, social image, robots, sitemap, CSP, and visual identity.
 
-## What changed
+Evidence is under `.factory/evidence/review-2/`. The full report is
+`.factory/review-2.md`.
 
-- Added `relay_round_state` to the existing SQLite database under `/data`.
-  It holds only the current temporary round, score, tap count, and matching
-  companion acknowledgement. It is removed with the two-hour room record.
-- The relay commits round starts, scores, acknowledgements, and round ends
-  before broadcasting them. Every authenticated socket reconnect receives a
-  direct `relay_state` snapshot.
-- The host renders its non-zero score after the relay commits it. The
-  companion applies the replayed state and acknowledges only the exact stored
-  score, round, and tap count.
-- Taps now carry the companion's cue-to-tap delay. The host scores that delay,
-  rather than the later WebSocket arrival time. The tap pad stays disabled
-  until a cue arrives, preventing an unscored pre-cue tap.
-- The existing 30-round desktop-host/390 px-companion regression and live
-  probe now require a persisted `relay_state` replay after the forced delayed
-  score disconnect. A Rust regression reopens SQLite and rejects a mismatched
-  acknowledgement before accepting the exact one.
+## Blocking next steps
 
-## Reproduction and verification
-
-The verifier's documented failure was the baseline: after a 400 ms delayed
-score frame and a companion reconnect, the host could retain `1 returned tap`
-while showing `0%`. The failure was timing-sensitive in this environment, so
-the repair covers both contributing paths instead of relying on a single
-flaky run: durable score replay/acknowledgement and cue-local scoring.
-
-Commands run successfully during this repair:
+Repair every finding in review 2, especially the regressed earlier findings.
+Then create one final candidate commit, update the handoff for that same
+candidate, and run:
 
 ```sh
 npm ci
 npm test
 npm run build
-cargo fmt --all -- --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test
-cargo build --release --locked
-cargo test regression_delayed_score_ack_replays_durable_round_state_after_companion_reconnect -- --nocapture
-npx playwright test tests/browser/product.spec.ts --grep '30 delayed-score' --project=chromium
-```
-
-The strengthened 30-round regression passed all rounds locally. It forces a
-host reconnect, delays and drops the first companion score frame, reconnects
-the companion, observes the durable replay, and asserts the same non-zero
-score on desktop host and 390 px companion. The production build is 26.35 KB
-JavaScript raw / 8.85 KB gzip and 17.51 KB CSS raw / 4.59 KB gzip.
-Docker is not installed in this worker, so the container build itself could
-not run here; the locked Rust release build passed.
-
-Run the final clean gate from this committed checkout:
-
-```sh
-npm ci
-npm test
-npm run build
-cargo build --release --locked
 RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
 
-Browser coverage includes desktop and 390 px mobile, keyboard skip/error
-recovery, Axe serious/critical scans on every route, 200% text, privacy
-request capture, service-worker offline reload, reduced motion, response
-headers, and cache policy. No third-party runtime requests are allowed.
-
-## Deploy
-
-The guarded deployment only accepts a clean, pushed final handoff commit and
-uses the existing one-replica `/data` volume configuration:
+Deploy only that final candidate with the guarded product command:
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
 ```
 
-It builds `sf-haptic-beat-relay`, pins HTTP WebSocket ingress, mounts
-`sf-haptic-beat-relay-data` at `/data`, and runs the 30-round live relay,
-rate-limit, persistence, and final identity checks.
-
-## Known gaps and next steps
-
-No product gaps remain from verification 24. Vibration and controller haptics
-still depend on browser and device support; the visual cue remains the tested
-fallback. No resources were created beyond the existing product deployment
-configuration.
+No infrastructure, DNS, billing, secrets, other services, or product resources
+were read or modified during this review.
