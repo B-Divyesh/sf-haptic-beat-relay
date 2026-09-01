@@ -1,0 +1,5 @@
+
+> haptic-beat-relay@1.0.0 test:live-topology
+> node scripts/verify-live-topology.mjs
+
+{"app":"sf-haptic-beat-relay","revision":"sf-haptic-beat-relay--r983cdd4927","activeRevisions":1,"minReplicas":1,"maxReplicas":1,"runningReplicas":1,"readyReplicas":1,"transport":"Http","dataDir":"/data","dataVolume":"sf-haptic-beat-relay-data","image":"sociobotregistry.azurecr.io/sf-haptic-beat-relay:983cdd4927119ee43d7840416f6737685d9fb204","buildSha":"983cdd4927119ee43d7840416f6737685d9fb204"}

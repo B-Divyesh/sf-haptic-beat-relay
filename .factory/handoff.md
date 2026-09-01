@@ -74,11 +74,35 @@ one replica and SQLite state under `/data`.
 
 ## Scoped deployment and live proof
 
-The first guarded rollout of this repair is run from this committed handoff.
-It builds through ACR, touches only `sf-haptic-beat-relay`, preserves the
-existing one-replica `/data` topology, and runs every live gate below. Final
-topology, identity, persistence, 30-round, rate-limit, and browser evidence is
-added after that rollout.
+The first committed repair candidate (`983cdd4`) was pushed and deployed with
+the guarded repository command. It touched only `sf-haptic-beat-relay` and its
+existing configured data mount.
+
+- The ACR source-archive build passed all 23 Dockerfile steps. The runtime is
+  non-root and contains the release Rust server plus the built frontend.
+- Live topology passed before and after the stability window: one active
+  revision, min/max one, one running and ready replica, HTTP ingress, `/data`
+  mounted from `sf-haptic-beat-relay-data`, full-SHA image, and matching health
+  identity.
+- A room survived a live restart onto a different replica and joined after the
+  restart from durable SQLite.
+- The guarded release passed 30/30 fresh API checks and 30/30 forced-reconnect,
+  delayed-score desktop/390 px rounds. The exact claim command passed again
+  after deployment.
+- Five rate probes during release and five after release each returned exactly
+  40 × 200 and 5 × 429 with `Retry-After: 1`.
+- Live browser QA covered eight routes at desktop and 390 px: 16 Axe scans had
+  zero serious/critical findings, normal flows had zero console errors, and
+  every route had `lang`, one H1, one main, alt text, and no overflow.
+- The live demo made only same-origin non-API requests and wrote no browser
+  storage. Keyboard error recovery, the designed focus ring, security headers,
+  offline service-worker reload, and exact health identity passed.
+- Live screenshots: `evidence/repair-22/live-desktop.png` and
+  `evidence/repair-22/live-mobile.png`.
+
+This final handoff commit changes documentation and evidence only. The same
+guarded command is run again for `$(git rev-parse HEAD)` so the released health
+identity and image tag match the final pushed repository state.
 
 ## Release command
 
@@ -95,6 +119,5 @@ RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 
 ## Known gaps
 
-- Docker is unavailable in this worker. The Dockerfile contract, local release
-  binary, and factory ACR build cover the container path.
+- Docker is unavailable locally. The factory ACR multi-stage build passed.
 - Package/consumer checks do not apply to this backend web application.

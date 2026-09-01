@@ -1,0 +1,1 @@
+live relay regression passed: 30/30 fresh API create→join checks and 30/30 delayed-score desktop-host + 390px-companion rounds with host and companion reconnection at https://haptic-beat-relay.sociobot.in
