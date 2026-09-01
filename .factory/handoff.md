@@ -1,3 +1,9 @@
+# Haptic Beat Relay — current independent verification: FAIL
+
+**FAIL — release blocked for `ddecd1bbdd5552f772a49badf88a0e7483d57a46`.**
+The required 30-round live relay check failed at round 23: host score `78%`,
+companion score `0%`. See [verification-23.md](verification-23.md).
+
 # Haptic Beat Relay — repair 21 handoff
 
 ## Status
