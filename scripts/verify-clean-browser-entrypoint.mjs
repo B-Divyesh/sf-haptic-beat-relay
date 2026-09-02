@@ -12,12 +12,12 @@ const playwrightConfig = readFileSync(new URL('../playwright.config.ts', import.
 
 assert.match(
   packageJson.scripts['test:browser'],
-  /npm run build && cargo build --locked && playwright test$/,
-  'the browser entry point must finish a locked Rust build before Playwright starts its web-server timer',
+  /npm run build && BUILD_SHA=0123456789abcdef0123456789abcdef01234567 cargo build --locked && playwright test$/,
+  'the browser entry point must finish an identified, locked Rust build before Playwright starts its web-server timer',
 );
 assert.match(
   playwrightConfig,
-  /command: `BUILD_SHA=\$\{testBuildSha\} \.\/target\/debug\/haptic-beat-relay`/,
+  /command: '\.\/target\/debug\/haptic-beat-relay'/,
   'Playwright must start the prebuilt backend binary',
 );
 assert.doesNotMatch(
