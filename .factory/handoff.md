@@ -23,6 +23,8 @@ command and verifies its live build identity before reporting success.
   activation, and public release records.
 - Removed decorative landing labels, updated route and social titles, and
   recorded the generated-art source SHA-256.
+- Standardized host and join titles to begin with the product name; browser
+  coverage now asserts every public route's exact title.
 
 ## Verification
 
