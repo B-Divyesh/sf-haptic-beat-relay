@@ -19,3 +19,31 @@ export function nearestBeatDelta(now: number, beats: number[]): number | null {
   now - beats[0]);
 }
 
+type BeatTimer = (callback: () => void, delayMs: number) => number;
+
+export function startBeatClock(
+  onBeat: () => void,
+  intervalMs: number,
+  now: () => number = () => performance.now(),
+  schedule: BeatTimer = (callback, delayMs) => window.setTimeout(callback, delayMs),
+  cancel: (timer: number) => void = (timer) => window.clearTimeout(timer),
+): () => void {
+  const startedAt = now();
+  let nextBeat = 0;
+  let timer: number | undefined;
+  let stopped = false;
+
+  const tick = () => {
+    if (stopped) return;
+    onBeat();
+    nextBeat += 1;
+    const nextDeadline = startedAt + nextBeat * intervalMs;
+    timer = schedule(tick, Math.max(0, nextDeadline - now()));
+  };
+
+  tick();
+  return () => {
+    stopped = true;
+    if (timer !== undefined) cancel(timer);
+  };
+}

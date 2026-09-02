@@ -166,6 +166,17 @@ test('@claim:tempo-and-loop-controls a host chooses a tempo and loads a local au
   await hostContext.addInitScript(() => {
     HTMLMediaElement.prototype.play = () => Promise.reject(new DOMException('blocked sample fixture', 'NotAllowedError'));
   });
+  await friendContext.addInitScript(() => {
+    Object.defineProperty(navigator, 'vibrate', {
+      configurable: true,
+      value: () => {
+        const cueWindow = window as Window & { cueMarks?: number[] };
+        cueWindow.cueMarks ??= [];
+        cueWindow.cueMarks.push(performance.now());
+        return true;
+      },
+    });
+  });
   const host = await hostContext.newPage();
   const friend = await friendContext.newPage();
   await host.goto('/host');
@@ -180,18 +191,14 @@ test('@claim:tempo-and-loop-controls a host chooses a tempo and loads a local au
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
   await friend.goto(`/join/${code}`);
   await expect(host.getByRole('button', { name: 'Start 60-second round' })).toBeEnabled();
-  const cueMarks = friend.evaluate(() => new Promise<number[]>((resolve) => {
-    const pad = document.querySelector('#tap-pad')!;
-    const marks: number[] = [];
-    const observer = new MutationObserver(() => {
-      if (pad.classList.contains('cue')) marks.push(performance.now());
-      if (marks.length === 3) { observer.disconnect(); resolve(marks); }
-    });
-    observer.observe(pad, { attributes: true, attributeFilter: ['class'] });
-  }));
   await host.getByRole('button', { name: 'Start 60-second round' }).click();
-  const marks = await cueMarks;
-  for (const interval of [marks[1] - marks[0], marks[2] - marks[1]]) {
+  await expect.poll(() => friend.evaluate(() => (
+    window as Window & { cueMarks?: number[] }
+  ).cueMarks?.length ?? 0)).toBeGreaterThanOrEqual(5);
+  const marks = await friend.evaluate(() => (
+    window as Window & { cueMarks?: number[] }
+  ).cueMarks!.slice(0, 5));
+  for (const interval of marks.slice(1).map((mark, index) => mark - marks[index])) {
     expect(Math.abs(interval - (60_000 / 180))).toBeLessThan(110);
   }
   await expect(host.locator('#file-name')).toHaveText('The audio loop could not play. Continue with the visual beat cues.');

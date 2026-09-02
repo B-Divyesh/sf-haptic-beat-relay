@@ -1118,12 +1118,20 @@ mod tests {
             PathBuf::from("/tmp/selected-relay.sqlite3"),
         );
         assert_eq!(
-            resolved_database_path(None, &durable, Some(PathBuf::from("/tmp/relay/relay-server"))),
+            resolved_database_path(
+                None,
+                &durable,
+                Some(PathBuf::from("/tmp/relay/relay-server"))
+            ),
             durable.join("relay.sqlite3"),
         );
         let missing = directory.path().join("missing-data");
         assert_eq!(
-            resolved_database_path(None, &missing, Some(PathBuf::from("/tmp/relay/relay-server"))),
+            resolved_database_path(
+                None,
+                &missing,
+                Some(PathBuf::from("/tmp/relay/relay-server"))
+            ),
             PathBuf::from("/tmp/relay/relay.sqlite3"),
         );
     }
@@ -1372,7 +1380,14 @@ mod tests {
             .collect();
         let retry_after: Vec<Option<HeaderValue>> = responses
             .iter()
-            .map(|response| response.as_ref().unwrap().headers().get(header::RETRY_AFTER).cloned())
+            .map(|response| {
+                response
+                    .as_ref()
+                    .unwrap()
+                    .headers()
+                    .get(header::RETRY_AFTER)
+                    .cloned()
+            })
             .collect();
         assert_eq!(
             statuses

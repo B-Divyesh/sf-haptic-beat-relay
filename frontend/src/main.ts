@@ -1,5 +1,5 @@
 import './styles.css';
-import { averageScore, nearestBeatDelta, normalizeRoomCode, timingScore } from './relay';
+import { averageScore, nearestBeatDelta, normalizeRoomCode, startBeatClock, timingScore } from './relay';
 
 type RoomMessage = {
   type: string;
@@ -383,7 +383,7 @@ async function setupHost(): Promise<void> {
   let socket: RelaySocket | undefined;
   let paired = false;
   let roundActive = false;
-  let timer: number | undefined;
+  let stopBeatClock: (() => void) | undefined;
   let finishTimer: number | undefined;
   let audio: HTMLAudioElement | undefined;
   let audioContext: AudioContext | undefined;
@@ -397,7 +397,7 @@ async function setupHost(): Promise<void> {
 
   cleanupPage = () => {
     socket?.close();
-    if (timer) clearInterval(timer);
+    stopBeatClock?.();
     if (finishTimer) clearTimeout(finishTimer);
     audio?.pause();
     audioContext?.close();
@@ -529,8 +529,11 @@ async function setupHost(): Promise<void> {
       audioContext ??= new AudioContext();
       void audioContext.resume();
       void audio?.play().catch(() => { fileName.textContent = 'The audio loop could not play. Continue with the visual beat cues.'; });
-      fireHostBeat(audioContext, socket, round, beats, ++beatId);
-      timer = window.setInterval(() => fireHostBeat(audioContext!, socket!, round, beats, ++beatId), 60000 / bpm);
+      stopBeatClock?.();
+      stopBeatClock = startBeatClock(
+        () => fireHostBeat(audioContext!, socket!, round, beats, ++beatId),
+        60000 / bpm,
+      );
       finishTimer = window.setTimeout(() => finishRound(), duration * 1000);
     });
   } catch (cause) {
@@ -542,8 +545,8 @@ async function setupHost(): Promise<void> {
   }
 
   function finishRound(): void {
-    if (timer) clearInterval(timer);
-    timer = undefined;
+    stopBeatClock?.();
+    stopBeatClock = undefined;
     audio?.pause();
     socket?.send(JSON.stringify({ type: 'round_end', score: averageScore(scores), round }));
     roundActive = false;
@@ -792,11 +795,11 @@ function pulseReturn(): void {
 
 function setupDemo(): void {
   const start = document.querySelector<HTMLButtonElement>('#demo-start')!;
-  let timer: number | undefined;
+  let stopBeatClock: (() => void) | undefined;
   let finish: number | undefined;
   let beat = 0;
   const scores = [92, 84, 97, 76, 89, 94, 81, 99, 87, 91, 83, 96, 78, 90, 95, 86, 93, 82, 98, 88];
-  cleanupPage = () => { if (timer) clearInterval(timer); if (finish) clearTimeout(finish); };
+  cleanupPage = () => { stopBeatClock?.(); if (finish) clearTimeout(finish); };
   start.addEventListener('click', () => {
     start.disabled = true;
     start.textContent = 'Sample round in progress';
@@ -809,11 +812,11 @@ function setupDemo(): void {
       beat += 1;
       updateScore(averageScore(scores.slice(0, beat)), beat);
     };
-    tick();
-    timer = window.setInterval(tick, 60000 / 104);
+    stopBeatClock?.();
+    stopBeatClock = startBeatClock(tick, 60000 / 104);
     finish = window.setTimeout(() => {
-      if (timer) clearInterval(timer);
-      timer = undefined;
+      stopBeatClock?.();
+      stopBeatClock = undefined;
       document.querySelector('#round-state')!.textContent = `Sample round complete with ${averageScore(scores)}% accuracy.`;
       start.disabled = false;
       start.textContent = 'Run the sample again';
