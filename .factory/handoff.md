@@ -40,7 +40,8 @@ command and verifies its live build identity before reporting success.
   reports title, language, main landmark, alt text, and no 200-route console
   errors.
 - Cold live evidence is stored under `.factory/evidence/polish-3/`. The
-  landing and demo screenshots show both required first-screen viewports.
+  landing and demo screenshots show both required first-screen viewports. The
+  final live build is checked with its exact `HEAD` identity.
 
 ## Release procedure
 
