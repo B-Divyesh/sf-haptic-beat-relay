@@ -48,6 +48,8 @@ excluded. No sentence exceeds 22 words. No banned marketing word appears.
 | Demo — sample data, nothing is saved | 6 | persistent banner |
 | Reset demo | 2 | action |
 | Create a real room | 4 | action |
+| Host a beat round | 4 | host h1 |
+| Try a sample beat round | 5 | demo h1 |
 | This sample sends cues at 104 BPM and shows Sam's returned taps. | 12 | sample detail |
 | Copy room link | 3 | action |
 | No audio loop selected. | 5 | status |

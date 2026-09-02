@@ -11,7 +11,7 @@ command and verifies its live build identity before reporting success.
   friend's phone.
 - Kept all three landing facts inside the 1440 × 900 and 390 × 844 first
   viewports.
-- Rebuilt the sample layout as a desktop two-column stage. The start action,
+- Rebuilt the sample beat layout as a desktop two-column stage. The start action,
   seeded 86% score, and three returned taps are visible without scrolling.
 - Kept `?demo=1` and `/demo` isolated in page memory. The persistent banner
   offers reset and real-room exit actions.

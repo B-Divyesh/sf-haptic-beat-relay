@@ -560,7 +560,7 @@ test('service-worker-only offline reload keeps the built shell and manifest avai
   await cdp.send('Network.clearBrowserCache');
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Try a tactile beat round');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Try a sample beat round');
   await expect(page.getByRole('button', { name: 'Start sample round' })).toBeVisible();
 });
 

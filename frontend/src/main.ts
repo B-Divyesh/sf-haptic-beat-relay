@@ -170,7 +170,7 @@ function hostPage(): string {
     <section class="room-shell" aria-labelledby="host-title">
       <div class="room-heading">
         <p class="eyebrow">Host device</p>
-        <h1 id="host-title" tabindex="-1">Host a tactile beat round</h1>
+        <h1 id="host-title" tabindex="-1">Host a beat round</h1>
         <p>Keep this screen open. Give the room code to one friend.</p>
       </div>
       <div id="host-error" class="notice error" role="alert" hidden></div>
@@ -239,7 +239,7 @@ function demoPage(): string {
       <div class="demo-topline">
       <div class="room-heading demo-heading">
         <p class="eyebrow">Sample host · paired with Sam</p>
-        <h1 id="demo-title" tabindex="-1">Try a tactile beat round</h1>
+        <h1 id="demo-title" tabindex="-1">Try a sample beat round</h1>
         <p>This sample sends cues at 104 BPM and shows Sam's returned taps.</p>
       </div>
       <section class="demo-live" aria-labelledby="sample-round-title">
