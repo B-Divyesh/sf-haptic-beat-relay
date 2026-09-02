@@ -157,15 +157,115 @@ async fn app_with_database_path(
     room_ttl: Duration,
 ) -> Result<Router, BoxError> {
     let database_path = database_path.as_ref();
+    app_with_database_path_and_storage_kind(
+        dist_dir,
+        database_path,
+        room_ttl,
+        database_path.starts_with("/data"),
+    )
+    .await
+}
+
+async fn app_with_database_path_and_storage_kind(
+    dist_dir: impl Into<String>,
+    database_path: &FilePath,
+    room_ttl: Duration,
+    durable_network_mount: bool,
+) -> Result<Router, BoxError> {
     if let Some(parent) = database_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let options = sqlite_connect_options(database_path, database_path.starts_with("/data"));
+    let dist_dir = dist_dir.into();
+    match start_app_from_database(
+        dist_dir.clone(),
+        database_path,
+        durable_network_mount,
+        room_ttl,
+    )
+    .await
+    {
+        Ok(application) => Ok(application),
+        Err(error) if durable_network_mount && sqlite_is_corrupt(error.as_ref()) => {
+            // Rooms, rate buckets, and round snapshots all expire within two
+            // hours. If Azure Files lost a page during an abrupt replica
+            // restart, the database is already unusable. Remove only these
+            // product-owned ephemeral files and start clean instead of leaving
+            // every room request on a permanent 500 response.
+            tracing::error!(
+                error = %error,
+                database_path = %database_path.display(),
+                "corrupt ephemeral relay database reset"
+            );
+            remove_sqlite_files(database_path)?;
+            start_app_from_database(dist_dir, database_path, durable_network_mount, room_ttl).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn start_app_from_database(
+    dist_dir: String,
+    database_path: &FilePath,
+    durable_network_mount: bool,
+    room_ttl: Duration,
+) -> Result<Router, BoxError> {
+    let database = initialize_database(database_path, durable_network_mount).await?;
+    finish_database_startup(dist_dir, database, room_ttl).await
+}
+
+async fn initialize_database(
+    database_path: &FilePath,
+    durable_network_mount: bool,
+) -> Result<SqlitePool, BoxError> {
+    let options = sqlite_connect_options(database_path, durable_network_mount);
     let database = SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
         .await?;
+    if durable_network_mount {
+        // Run this before the migration ledger is touched. It repairs the
+        // exact legacy state where a room row survived but its redundant
+        // expiry-index page did not.
+        sqlx::query("DROP INDEX IF EXISTS rooms_expires_at_idx")
+            .execute(&database)
+            .await?;
+        sqlx::query("DROP INDEX IF EXISTS rate_limits_window_idx")
+            .execute(&database)
+            .await?;
+    }
     MIGRATOR.run(&database).await?;
+    Ok(database)
+}
+
+fn sqlite_is_corrupt(error: &(dyn std::error::Error + 'static)) -> bool {
+    let message = error.to_string().to_ascii_lowercase();
+    message.contains("database disk image is malformed")
+        || message.contains("file is not a database")
+        || message.contains("code: 779")
+}
+
+fn remove_sqlite_files(database_path: &FilePath) -> std::io::Result<()> {
+    let mut paths = vec![database_path.to_path_buf()];
+    for suffix in ["-journal", "-wal", "-shm"] {
+        let mut sidecar = database_path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        paths.push(PathBuf::from(sidecar));
+    }
+    for path in paths {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
+}
+
+async fn finish_database_startup(
+    dist_dir: impl Into<String>,
+    database: SqlitePool,
+    room_ttl: Duration,
+) -> Result<Router, BoxError> {
     let started_at_ms = now_millis();
     sqlx::query("DELETE FROM rooms WHERE expires_at_ms <= ?")
         .bind(started_at_ms)
@@ -1276,6 +1376,32 @@ mod tests {
             optional_indexes.is_empty(),
             "durable tables must not rewrite restart-fragile secondary index pages"
         );
+    }
+
+    #[tokio::test]
+    async fn regression_corrupt_ephemeral_durable_database_recovers_for_new_rooms() {
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        std::fs::write(&database_path, b"not a sqlite database").unwrap();
+
+        let application = app_with_database_path_and_storage_kind(
+            "frontend/dist",
+            &database_path,
+            ROOM_TTL,
+            true,
+        )
+        .await
+        .unwrap();
+        let created = application
+            .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::OK);
+
+        let reported = std::io::Error::other(
+            "error returned from database: (code: 779) database disk image is malformed",
+        );
+        assert!(sqlite_is_corrupt(&reported));
     }
 
     #[tokio::test]

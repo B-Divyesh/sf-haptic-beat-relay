@@ -25,13 +25,18 @@ in place.
   expiry indexes; the small, short-lived tables remain efficient to scan.
 - Extended the live persistence gate. It now joins the pre-restart room and
   creates a fresh room after restart, covering both durable reads and writes.
+- Added a narrow startup recovery for an already-corrupt `/data` database. It
+  first removes only the known optional indexes. If SQLite still reports a
+  malformed file, it recreates the product's already-unusable two-hour room,
+  rate-limit, and round-state store. A regression starts from corrupt bytes and
+  proves a new room can then be created.
 
 ## Local evidence
 
 - Clean dependency install: `npm ci` installed 59 packages with no reported
   vulnerability.
 - Required gate: `npm test` passed 4 Vitest tests, Rust format, strict Clippy,
-  release/deployment/handoff contracts, 17 Rust tests, the clean browser entry
+  release/deployment/handoff contracts, 18 Rust tests, the clean browser entry
   check, and 42 Playwright tests with 8 intended project skips.
 - Timing stress: the exact 180 BPM browser claim passed 20 of 20 runs with two
   workers. It measured five haptic cues and enforced less than 110 ms error on
