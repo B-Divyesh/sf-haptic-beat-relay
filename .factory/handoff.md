@@ -1,76 +1,70 @@
-# Haptic Beat Relay — verification 27 handoff
+# Haptic Beat Relay — repair 24 handoff
 
 ## Outcome
 
-**FAIL — release blocked.** The deployed product is the requested candidate and
-the real host/friend flow works, but the candidate does not pass every local
-quality gate.
+The two release blockers in independent verification 27 are repaired. The
+existing host, friend, demo, privacy, offline, and deployment behavior remains
+in place.
 
-The exact tested product commit and complete evidence are recorded in
-`.factory/verification-27.md`. The live URL is
-<https://haptic-beat-relay.sociobot.in>.
+## Repairs
 
-## Blocking defects
+- Replaced interval-relative beat timers with a deadline-anchored beat clock.
+  Both real and sample rounds now calculate each cue from the round start, so a
+  delayed task does not move every later cue.
+- Added a unit regression for the verifier's 126.67 ms stall. It proves the
+  next cue returns to the original 180 BPM deadline.
+- Strengthened the paired browser claim from two visual-animation samples to
+  four direct vibration intervals. Every interval still has to stay within the
+  existing 110 ms bound. The check passed 20 consecutive runs with two workers.
+- Applied `cargo fmt --all` to the three reported Rust regions.
+- Added Rust format and strict Clippy checks to `npm test`. A formatting or lint
+  regression now fails the required product gate.
 
-1. Fresh `npm test` exited 1. The full Playwright run had 41 passes, 8 skips,
-   and one failure: the 180 BPM timing assertion saw 126.67 ms absolute error
-   where the test requires less than 110 ms. The exact claim command passed,
-   and 10 isolated repeats passed, so this is load-sensitive nondeterminism.
-2. `cargo fmt --all -- --check` exited 1 and reported formatting differences in
-   `src/lib.rs` around lines 1118, 1125, and 1372.
+## Local evidence
 
-No product code was changed by this verification.
+- Clean dependency install: `npm ci` installed 59 packages with no reported
+  vulnerability.
+- Required gate: `npm test` passed 4 Vitest tests, Rust format, strict Clippy,
+  release/deployment/handoff contracts, 16 Rust tests, the clean browser entry
+  check, and 42 Playwright tests with 8 intended project skips.
+- Timing stress: the exact 180 BPM browser claim passed 20 of 20 runs with two
+  workers. It measured five haptic cues and enforced less than 110 ms error on
+  all four intervals.
+- Production build: `npm run build` passed TypeScript and Vite. The entry is
+  26,101 bytes raw and 8.76 KB gzip; CSS is 17,673 bytes raw and 4.62 KB gzip.
+- Backend: `cargo build --release --locked`, format, and strict Clippy passed.
+  A release binary started with only `PATH` and `PORT=18080`; `/health` returned
+  build identity `dev`.
+- Load smoke: 100 concurrent room creations from 100 client identities all
+  returned 200 in 1,140 ms.
+- Browser baseline: desktop and 390 px mobile routes, keyboard recovery, 200%
+  text, 44 px targets, reduced motion, route titles, offline reload, response
+  headers, and serious/critical axe checks passed in the Playwright suite.
+- Privacy: the sample flow made no room API request or browser-storage entry;
+  the local-audio marker was never sent; observed product requests stayed on
+  the product origin.
+- URL verifier: 576 ms local load, no console errors, one `h1`, one `main`,
+  `lang=en`, complete image alt text, and labeled buttons. Screenshots and the
+  JSON report are under `.factory/evidence/repair-24/local/`.
 
-## What passed
+## Release verification
 
-- All 22 exact commands in `.factory/claims.json`.
-- The mandatory cold first-read and one-click sample gate.
-- Live build identity and byte-for-byte JS/CSS comparison.
-- Thirty fresh reconnecting host/390 px companion rounds.
-- Five live rate-limit repetitions: exactly 40 accepted requests per client,
-  then five `429` responses with `Retry-After: 1`.
-- One active HTTP replica, one ready replica, and durable SQLite under `/data`.
-- TypeScript production build, 3 Vitest tests, 16 Rust tests, strict Clippy,
-  and the locked release build.
-- Live desktop/mobile route structure, keyboard recovery, 200% text, 44 px
-  targets, reduced motion, and zero serious/critical axe findings.
-- Same-origin demo requests, empty browser storage, security/cache headers,
-  service-worker update, and offline sample reload.
-- Mobile Lighthouse: 99 performance and 100 for accessibility, best practices,
-  and SEO.
-
-## Verification commands
-
-```sh
-npm ci
-node -e "for (const c of require('./.factory/claims.json')) console.log(c.test)"
-npm test
-npm run build
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features --locked -- -D warnings
-cargo build --release --locked
-RELAY_ROUNDS=30 npm run test:live-relay
-RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
-RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
-```
-
-The tested product tree is the parent of this verification-only report commit;
-see `.factory/verification-27.md` for its exact immutable SHA.
-
-## Next steps
-
-Fix the timing test/product scheduling reliability and apply Rust formatting.
-Then rerun every command above from a clean checkout. Do not deploy until all
-required gates pass.
-
-When a repaired final candidate is ready, the guarded deployment command is:
+The guarded deployment command below builds the final full-SHA image, keeps
+one HTTP replica, mounts the existing product data share at `/data`, and runs
+the 30-round relay, repeated rate-limit, persistence, topology, and stability
+checks. The final live results will be recorded here after that rollout.
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
-```
-
-Verify that final candidate's immutable live identity with:
-
-```sh
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
+
+The final acceptance pass also runs every exact command in
+`.factory/claims.json` from a fresh clone, the fleet URL verifier, and mobile
+Lighthouse against <https://haptic-beat-relay.sociobot.in>.
+
+## Known limits
+
+Phone and controller vibration still depend on browser and device support. The
+friend view keeps its visual cue when haptics are unavailable. No new resource,
+secret, account, analytics, payment, or AI dependency was added.
