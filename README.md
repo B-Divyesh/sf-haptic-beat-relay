@@ -1,6 +1,6 @@
 # Haptic Beat Relay
 
-Haptic Beat Relay sends a host's beat to one friend's device. Your friend feels
+Haptic Beat Relay sends beat cues to one friend's phone. Your friend feels
 each cue, taps back, and builds a shared accuracy score.
 
 It is for friends, music practice, and small rhythm-game prototypes. No account
@@ -69,7 +69,7 @@ curl http://localhost:8080/health
 Finish the handoff, commit it, push it, then run:
 
 ```sh
-npm run deploy -- <full-git-sha>
+npm run deploy -- "$(git rev-parse HEAD)"
 ```
 
 ## Project records

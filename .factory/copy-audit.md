@@ -1,4 +1,4 @@
-# Copy audit — polish 2
+# Copy audit — polish 3
 
 Counts use visible Unicode word tokens. Commands and generated room codes are
 excluded. No sentence exceeds 22 words. No banned marketing word appears.
@@ -12,8 +12,7 @@ excluded. No sentence exceeds 22 words. No banned marketing word appears.
 | Demo | 1 | nav |
 | Join | 1 | nav |
 | Privacy | 1 | nav |
-| One host · one friend · one beat | 6 | label |
-| Send every beat to a friend | 6 | h1 |
+| Send beat cues to a friend's phone | 7 | h1 |
 | For friends and rhythm-game makers who need phone vibration cues and a shared timing score without an account. | 19 | audience |
 | Try it with sample data | 5 | action |
 | A paired sample round opens now. | 6 | action help |
@@ -40,7 +39,7 @@ excluded. No sentence exceeds 22 words. No banned marketing word appears.
 | Send beat cues between two devices. | 6 | footer |
 | Terms | 1 | footer link |
 | Built by Param Factory | 4 | footer link |
-| Version 1.0 · Original generated environment art | 6 | footer note |
+| Version 1.0 · Generated environment art | 5 | footer note |
 
 ## Demo and room pages
 
@@ -53,6 +52,7 @@ excluded. No sentence exceeds 22 words. No banned marketing word appears.
 | Copy room link | 3 | action |
 | No audio loop selected. | 5 | status |
 | Press Space or tap | 4 | keyboard help |
+| The audio loop could not play. Continue with the visual beat cues. | 12 | error |
 
 ## Terminology
 
@@ -66,5 +66,5 @@ excluded. No sentence exceeds 22 words. No banned marketing word appears.
 
 ## README
 
-README prose has 30 sentences and 258 words. Its average is 8.6 words. No
+README prose has 30 sentences and 255 words. Its average is 8.5 words. No
 sentence exceeds 22 words. It uses the same terms as the product.

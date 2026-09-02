@@ -1,1 +1,1 @@
-Send phone vibration cues to a friend and score the taps they send back.
+Send vibration beat cues to a friend and score their returned taps.

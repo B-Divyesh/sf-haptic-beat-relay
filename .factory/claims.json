@@ -21,6 +21,13 @@
     "sandbox": "fresh browser context at /?demo=1; record three sample cue updates and measure the two 60,000/104 ms intervals"
   },
   {
+    "id": "tempo-and-loop-controls",
+    "claim": "Choose a round tempo and load an audio loop from the host device.",
+    "where": "landing steps, host controls",
+    "test": "npm run test:browser -- --grep @claim:tempo-and-loop-controls",
+    "sandbox": "fresh host and friend contexts; select 180 BPM and a local audio fixture, then measure two returned visual cue intervals and assert the selected filename is ready"
+  },
+  {
     "id": "local-audio",
     "claim": "The audio loop stays on the host device.",
     "where": "landing facts, host file picker, privacy, README",
@@ -57,7 +64,7 @@
   },
   {
     "id": "shared-score",
-    "claim": "A friend receives each cue, taps back, and builds a shared accuracy score.",
+    "claim": "A friend joining enables the host round button, receives each cue, taps back, and builds a shared accuracy score.",
     "where": "landing preview and steps, live room, README",
     "test": "npm run test:browser -- --grep @claim:shared-score",
     "sandbox": "two fresh browser contexts; create and join one room, start a round, receive a cue, return a tap, and see the same scored result"
@@ -138,5 +145,12 @@
     "where": "README local run",
     "test": "cargo test claim_database_path_uses_an_explicit_path_then_data_or_the_executable_directory",
     "sandbox": "temporary directories; assert configured, durable-data, and executable-directory path selection without changing process environment"
+  },
+  {
+    "id": "public-records",
+    "claim": "This release identifies version 1.0, its MIT license, and its generated-art record.",
+    "where": "footer, terms, README, design record",
+    "test": "npm run test:browser -- --grep @claim:public-records",
+    "sandbox": "clean checkout; check the MIT file, package version, displayed footer and terms, source-art SHA-256, and factory-image provenance record"
   }
 ]

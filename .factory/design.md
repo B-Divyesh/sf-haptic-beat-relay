@@ -44,5 +44,5 @@ The generated scene is used only as environmental context. All required words an
 
 ## Provenance
 
-- `assets/src/relay-clearing.png`: generated for this product with the factory image model (`factory-image`) on 2026-08-28 from the prompt sheet above. Original generated work; no brands or copyrighted characters requested.
+- `assets/src/relay-clearing.png`: generated for this product with the factory image model (`factory-image`) on 2026-08-28 from the prompt sheet above. Original generated work; no brands or copyrighted characters requested. SHA-256: `91186453bc0fe4f9024d98c02a293f38fe8405ae1060ab0f5c9d77262d430c3f`.
 - Optimized responsive WebP exports are derived locally from that source. The generated-image disclosure appears in the site footer.

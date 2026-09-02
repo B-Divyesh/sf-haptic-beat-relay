@@ -42,7 +42,7 @@ let cleanupPage: (() => void) | undefined;
 let objectAudioUrl: string | undefined;
 
 const pageTitles: Record<string, string> = {
-  '/': 'Haptic Beat Relay — send tactile beat cues',
+  '/': 'Haptic Beat Relay — send beat cues to a friend',
   '/demo': 'Demo — Haptic Beat Relay',
   '/host': 'Host a round — Haptic Beat Relay',
   '/join': 'Join a room — Haptic Beat Relay',
@@ -91,7 +91,7 @@ function footer(): string {
         <a href="/terms" data-route>Terms</a>
         <a href="https://sociobot.in" rel="external">Built by Param Factory <span class="sr-only">(external site)</span></a>
       </nav>
-      <p class="build-note">Version 1.0 · Original generated environment art</p>
+      <p class="build-note">Version 1.0 · Generated environment art</p>
     </footer>`;
 }
 
@@ -107,8 +107,7 @@ function landingPage(): string {
     <main id="main">
       <section class="hero scene-section" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow">One host · one friend · one beat</p>
-          <h1 id="hero-title" tabindex="-1">Send every beat to a friend</h1>
+          <h1 id="hero-title" tabindex="-1">Send beat cues to a friend's phone</h1>
           <p class="lede">For friends and rhythm-game makers who need phone vibration cues and a shared timing score without an account.</p>
           <div class="hero-action-row">
             <a class="button primary" href="/?demo=1" data-route>Try it with sample data</a>
@@ -132,7 +131,6 @@ function landingPage(): string {
 
       <section class="preview-section" aria-labelledby="preview-title">
         <div>
-          <p class="eyebrow">The shared view</p>
           <h2 id="preview-title">See the same round on both devices</h2>
           <p>The host sets the pace. Your friend feels each cue and taps the beat back.</p>
         </div>
@@ -156,7 +154,6 @@ function landingPage(): string {
 
       <section class="limits-section" aria-labelledby="limits-title">
         <div>
-          <p class="eyebrow">Clear limits</p>
           <h2 id="limits-title">Vibration varies by browser and device</h2>
         </div>
         <div class="prose">
@@ -238,7 +235,8 @@ function companionPage(code = ''): string {
 
 function demoPage(): string {
   return `${demoBanner()}${header()}<main id="main" class="app-main demo-main">
-    <section class="room-shell" aria-labelledby="demo-title">
+    <section class="room-shell demo-shell" aria-labelledby="demo-title">
+      <div class="demo-topline">
       <div class="room-heading demo-heading">
         <p class="eyebrow">Sample host · paired with Sam</p>
         <h1 id="demo-title" tabindex="-1">Try a tactile beat round</h1>
@@ -248,6 +246,7 @@ function demoPage(): string {
         <div class="demo-live-top"><div><p class="eyebrow">Paired sample</p><h2 id="sample-round-title">Sam taps each cue back</h2></div><button class="button primary" id="demo-start" type="button">Start sample round</button></div>
         ${roundPanel('Sam returned 3 taps in the last round.', 86, 3, '3 returned taps.')}
       </section>
+      </div>
       <div class="host-grid demo-details">
         <section class="controls-panel" aria-labelledby="sample-title">
           <h2 id="sample-title">Sample setup</h2>
@@ -273,14 +272,14 @@ function legalPage(kind: 'privacy' | 'terms'): string {
       <h2>Accounts and advertising</h2>
       <p>There are no accounts or third-party advertising requests.</p>
       <h2>Questions</h2><p>Email <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p>` : `<h2>The service</h2>
-      <p>Haptic Beat Relay is free software for small music and game sessions.</p>
+      <p>Haptic Beat Relay is free to use for small music and game sessions.</p>
       <p>Browser and device support can change how vibration and controller cues work.</p>
       <h2>Your use</h2>
       <p>Use only audio that you have permission to play. Do not use the relay for unlawful activity.</p>
       <p>Do not rely on vibration cues for safety, health, or emergency alerts.</p>
       <h2>Availability</h2>
       <p>The service is provided without a promise of uninterrupted availability.</p>
-      <p>These terms use the MIT license for the source code. They were last updated on 28 August 2026.</p>`}
+      <p>The source code is available under the MIT License.</p>`}
   </article></main>${footer()}`;
 }
 
@@ -529,7 +528,7 @@ async function setupHost(): Promise<void> {
       document.querySelector('#round-state')!.textContent = 'Listen for the beat. Your friend is tapping it back.';
       audioContext ??= new AudioContext();
       void audioContext.resume();
-      void audio?.play().catch(() => { fileName.textContent = 'The audio loop could not play. The built-in click is running.'; });
+      void audio?.play().catch(() => { fileName.textContent = 'The audio loop could not play. Continue with the visual beat cues.'; });
       fireHostBeat(audioContext, socket, round, beats, ++beatId);
       timer = window.setInterval(() => fireHostBeat(audioContext!, socket!, round, beats, ++beatId), 60000 / bpm);
       finishTimer = window.setTimeout(() => finishRound(), duration * 1000);

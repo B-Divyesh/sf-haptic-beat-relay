@@ -1,5 +1,7 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const testBuildSha = '0123456789abcdef0123456789abcdef01234567';
 
@@ -20,8 +22,8 @@ test('landing page explains the job and passes an accessibility scan', async ({ 
     if (message.type() === 'error') errors.push(message.text());
   });
   await page.goto('/');
-  await expect(page).toHaveTitle('Haptic Beat Relay — send tactile beat cues');
-  await expect(page.locator('h1')).toHaveText('Send every beat to a friend');
+  await expect(page).toHaveTitle('Haptic Beat Relay — send beat cues to a friend');
+  await expect(page.locator('h1')).toHaveText("Send beat cues to a friend's phone");
   await expect(page.getByRole('link', { name: 'Try it with sample data' })).toBeVisible();
   await expect(page.locator('main')).toHaveCount(1);
   await expect(page.locator('h1')).toHaveCount(1);
@@ -44,11 +46,11 @@ test('regression: the audience and sample action fit in the first viewport', asy
     expect(box!.y, await locator.innerText()).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height, await locator.innerText()).toBeLessThanOrEqual(viewport!.height);
   }
+  const facts = page.locator('.plain-facts');
+  const factsBox = await facts.boundingBox();
+  expect(factsBox).not.toBeNull();
+  expect(factsBox!.y + factsBox!.height).toBeLessThanOrEqual(viewport!.height);
   if (testInfo.project.name === 'mobile') {
-    const facts = page.locator('.plain-facts');
-    const factsBox = await facts.boundingBox();
-    expect(factsBox).not.toBeNull();
-    expect(factsBox!.y + factsBox!.height).toBeLessThanOrEqual(viewport!.height);
     const splitWords = await page.locator('#hero-title').evaluate((heading) => {
       const text = heading.firstChild?.textContent ?? '';
       return [...text.matchAll(/\S+/g)].filter((match) => {
@@ -86,7 +88,7 @@ test('keyboard users can skip navigation, change routes, and recover from form e
   await expect(page.locator('#join-code')).toBeFocused();
 });
 
-test('@claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds', async ({ page }, testInfo) => {
+test('@claim:demo-sandbox @claim:sample-duration sample round starts in one click, stays private, and ends after 12 seconds', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
   await page.goto('/?demo=1');
@@ -94,12 +96,16 @@ test('@claim:demo-sandbox @claim:sample-duration sample round starts in one clic
   await expect(page.locator('#round-state')).toContainText('Sam returned 3 taps');
   await expect(page.locator('#score-value')).toHaveText('86%');
   await expect(page.locator('#tap-count')).toHaveText('3 returned taps.');
-  if (testInfo.project.name === 'mobile') {
-    const viewport = page.viewportSize();
-    const startBox = await page.getByRole('button', { name: 'Start sample round' }).boundingBox();
-    const scoreBox = await page.locator('#score-value').boundingBox();
-    expect(startBox!.y + startBox!.height).toBeLessThanOrEqual(viewport!.height);
-    expect(scoreBox!.y + scoreBox!.height).toBeLessThanOrEqual(viewport!.height);
+  const viewport = page.viewportSize();
+  for (const locator of [
+    page.getByRole('button', { name: 'Start sample round' }),
+    page.locator('#round-state'),
+    page.locator('#score-value'),
+    page.locator('#tap-count'),
+  ]) {
+    const box = await locator.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y + box!.height, await locator.innerText()).toBeLessThanOrEqual(viewport!.height);
   }
   await page.getByRole('button', { name: 'Start sample round' }).click();
   await expect(page.locator('#tap-count')).not.toHaveText('No returned taps yet.');
@@ -151,6 +157,63 @@ test('@claim:local-audio and @claim:no-third-party uploaded audio stays in the h
   await expect(page.locator('#file-name')).toContainText('stays on this device');
   expect(requests.some((request) => request.body?.includes('private-audio-marker'))).toBe(false);
   expect(requests.every((request) => new URL(request.url).origin === 'http://127.0.0.1:8080')).toBe(true);
+});
+
+test('@claim:tempo-and-loop-controls a host chooses a tempo and loads a local audio loop', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'One paired browser run measures the selected round tempo.');
+  const hostContext = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '198.18.96.45' } });
+  const friendContext = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '198.18.97.45' } });
+  await hostContext.addInitScript(() => {
+    HTMLMediaElement.prototype.play = () => Promise.reject(new DOMException('blocked sample fixture', 'NotAllowedError'));
+  });
+  const host = await hostContext.newPage();
+  const friend = await friendContext.newPage();
+  await host.goto('/host');
+  await host.locator('#bpm').fill('180');
+  await expect(host.locator('#bpm-output')).toHaveText('180 BPM');
+  await host.locator('#audio-loop').setInputFiles({
+    name: 'selected-loop.wav', mimeType: 'audio/wav', buffer: Buffer.from('selected-local-loop'),
+  });
+  await expect(host.locator('#file-name')).toContainText('selected-loop.wav is ready');
+  await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/);
+  const code = await host.locator('#room-code').textContent();
+  expect(code).toMatch(/^[A-Z0-9]{6}$/);
+  await friend.goto(`/join/${code}`);
+  await expect(host.getByRole('button', { name: 'Start 60-second round' })).toBeEnabled();
+  const cueMarks = friend.evaluate(() => new Promise<number[]>((resolve) => {
+    const pad = document.querySelector('#tap-pad')!;
+    const marks: number[] = [];
+    const observer = new MutationObserver(() => {
+      if (pad.classList.contains('cue')) marks.push(performance.now());
+      if (marks.length === 3) { observer.disconnect(); resolve(marks); }
+    });
+    observer.observe(pad, { attributes: true, attributeFilter: ['class'] });
+  }));
+  await host.getByRole('button', { name: 'Start 60-second round' }).click();
+  const marks = await cueMarks;
+  for (const interval of [marks[1] - marks[0], marks[2] - marks[1]]) {
+    expect(Math.abs(interval - (60_000 / 180))).toBeLessThan(110);
+  }
+  await expect(host.locator('#file-name')).toHaveText('The audio loop could not play. Continue with the visual beat cues.');
+  await hostContext.close();
+  await friendContext.close();
+});
+
+test('@claim:public-records the license and generated-art record are present', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'One filesystem-backed release record check is enough.');
+  const license = readFileSync('LICENSE', 'utf8');
+  const source = readFileSync('assets/src/relay-clearing.png');
+  const design = readFileSync('.factory/design.md', 'utf8');
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+  expect(license).toContain('Permission is hereby granted, free of charge');
+  expect(manifest.version).toBe('1.0.0');
+  expect(createHash('sha256').update(source).digest('hex')).toBe('91186453bc0fe4f9024d98c02a293f38fe8405ae1060ab0f5c9d77262d430c3f');
+  expect(design).toContain('factory-image');
+  expect(design).toContain('91186453bc0fe4f9024d98c02a293f38fe8405ae1060ab0f5c9d77262d430c3f');
+  await page.goto('/');
+  await expect(page.locator('.build-note')).toHaveText('Version 1.0 · Generated environment art');
+  await page.goto('/terms');
+  await expect(page.getByText('The source code is available under the MIT License.')).toBeVisible();
 });
 
 test('room creation reports its two-hour expiry', async ({ request }) => {
