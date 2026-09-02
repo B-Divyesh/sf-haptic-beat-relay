@@ -1,65 +1,76 @@
-# Haptic Beat Relay — polish 3 handoff
+# Haptic Beat Relay — verification 27 handoff
 
 ## Outcome
 
-All review findings are closed. The final release uses the guarded deployment
-command and verifies its live build identity before reporting success.
+**FAIL — release blocked.** The deployed product is the requested candidate and
+the real host/friend flow works, but the candidate does not pass every local
+quality gate.
 
-## What changed
+The exact tested product commit and complete evidence are recorded in
+`.factory/verification-27.md`. The live URL is
+<https://haptic-beat-relay.sociobot.in>.
 
-- Rewrote the first screen around the concrete job: send beat cues to a
-  friend's phone.
-- Kept all three landing facts inside the 1440 × 900 and 390 × 844 first
-  viewports.
-- Rebuilt the sample beat layout as a desktop two-column stage. The start action,
-  seeded 86% score, and three returned taps are visible without scrolling.
-- Gave the desktop sample heading its own wider column so it never runs beneath
-  the live-round panel.
-- Kept `?demo=1` and `/demo` isolated in page memory. The persistent banner
-  offers reset and real-room exit actions.
-- Replaced the unproved audible fallback message with a visual-cue recovery
-  message.
-- Added claim coverage for tempo and local-loop controls, joining-button
-  activation, and public release records.
-- Removed decorative landing labels, updated route and social titles, and
-  recorded the generated-art source SHA-256.
-- Standardized host and join titles to begin with the product name; browser
-  coverage now asserts every public route's exact title.
+## Blocking defects
 
-## Verification
+1. Fresh `npm test` exited 1. The full Playwright run had 41 passes, 8 skips,
+   and one failure: the 180 BPM timing assertion saw 126.67 ms absolute error
+   where the test requires less than 110 ms. The exact claim command passed,
+   and 10 isolated repeats passed, so this is load-sensitive nondeterminism.
+2. `cargo fmt --all -- --check` exited 1 and reported formatting differences in
+   `src/lib.rs` around lines 1118, 1125, and 1372.
 
-- `npm run build` completes with a 8.67 KB gzip JavaScript entry and 4.63 KB
-  gzip CSS entry.
-- `npm test` passes its unit, Rust, deployment-contract, clean-entry, and
-  browser stages.
-- Every command in `.factory/claims.json` is run from a fresh clone after the
-  guarded deployment. This includes the 30-round live relay, five-client
-  allowance, and immutable topology checks.
-- Browser coverage checks desktop 1440 × 900 and mobile 390 × 844 layouts.
-  It checks demo isolation, real routing, history focus, 404, keyboard,
-  touch targets, offline reload, and 200% text size.
-- Axe has no serious or critical issue on each public route. `verify-url.sh`
-  reports title, language, main landmark, alt text, and no 200-route console
-  errors.
-- Cold live evidence is stored under `.factory/evidence/polish-3/`. The
-  landing and demo screenshots show both required first-screen viewports. The
-  final live build is checked with its exact `HEAD` identity.
+No product code was changed by this verification.
 
-## Release procedure
+## What passed
 
-Commit and push this handoff, then deploy the checked-out candidate:
+- All 22 exact commands in `.factory/claims.json`.
+- The mandatory cold first-read and one-click sample gate.
+- Live build identity and byte-for-byte JS/CSS comparison.
+- Thirty fresh reconnecting host/390 px companion rounds.
+- Five live rate-limit repetitions: exactly 40 accepted requests per client,
+  then five `429` responses with `Retry-After: 1`.
+- One active HTTP replica, one ready replica, and durable SQLite under `/data`.
+- TypeScript production build, 3 Vitest tests, 16 Rust tests, strict Clippy,
+  and the locked release build.
+- Live desktop/mobile route structure, keyboard recovery, 200% text, 44 px
+  targets, reduced motion, and zero serious/critical axe findings.
+- Same-origin demo requests, empty browser storage, security/cache headers,
+  service-worker update, and offline sample reload.
+- Mobile Lighthouse: 99 performance and 100 for accessibility, best practices,
+  and SEO.
+
+## Verification commands
+
+```sh
+npm ci
+node -e "for (const c of require('./.factory/claims.json')) console.log(c.test)"
+npm test
+npm run build
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo build --release --locked
+RELAY_ROUNDS=30 npm run test:live-relay
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
+```
+
+The tested product tree is the parent of this verification-only report commit;
+see `.factory/verification-27.md` for its exact immutable SHA.
+
+## Next steps
+
+Fix the timing test/product scheduling reliability and apply Rust formatting.
+Then rerun every command above from a clean checkout. Do not deploy until all
+required gates pass.
+
+When a repaired final candidate is ready, the guarded deployment command is:
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
 ```
 
-Verify the immutable live identity after deployment:
+Verify that final candidate's immutable live identity with:
 
 ```sh
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
-
-## Known gaps
-
-None. Browser vibration and controller haptics still depend on device support.
-The product shows a visual cue when vibration is unavailable.
