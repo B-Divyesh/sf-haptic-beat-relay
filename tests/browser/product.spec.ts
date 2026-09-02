@@ -578,10 +578,20 @@ test('unknown routes return an HTTP 404 and non-audio files are rejected', async
 });
 
 test('real routes have one heading, useful titles, and no mobile overflow', async ({ page }, testInfo) => {
-  for (const route of ['/', '/demo', '/host', '/join', '/privacy', '/terms', '/404', '/missing-page']) {
+  const routes = [
+    ['/', 'Haptic Beat Relay — send beat cues to a friend'],
+    ['/demo', 'Demo — Haptic Beat Relay'],
+    ['/host', 'Haptic Beat Relay — host a beat round'],
+    ['/join', 'Haptic Beat Relay — join a friend’s beat room'],
+    ['/privacy', 'Privacy — Haptic Beat Relay'],
+    ['/terms', 'Terms — Haptic Beat Relay'],
+    ['/404', 'Page not found — Haptic Beat Relay'],
+    ['/missing-page', 'Page not found — Haptic Beat Relay'],
+  ] as const;
+  for (const [route, title] of routes) {
     await page.goto(route);
     await expect(page.locator('h1')).toHaveCount(1);
-    await expect(page).not.toHaveTitle(/^Haptic Beat Relay$/);
+    await expect(page).toHaveTitle(title);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /.+/);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /haptic-beat-relay\.sociobot\.in/);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

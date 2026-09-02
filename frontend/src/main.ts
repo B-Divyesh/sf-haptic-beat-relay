@@ -44,8 +44,8 @@ let objectAudioUrl: string | undefined;
 const pageTitles: Record<string, string> = {
   '/': 'Haptic Beat Relay — send beat cues to a friend',
   '/demo': 'Demo — Haptic Beat Relay',
-  '/host': 'Host a round — Haptic Beat Relay',
-  '/join': 'Join a room — Haptic Beat Relay',
+  '/host': 'Haptic Beat Relay — host a beat round',
+  '/join': 'Haptic Beat Relay — join a friend’s beat room',
   '/privacy': 'Privacy — Haptic Beat Relay',
   '/terms': 'Terms — Haptic Beat Relay',
   '/404': 'Page not found — Haptic Beat Relay',
