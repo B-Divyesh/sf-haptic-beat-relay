@@ -1,0 +1,14 @@
+{
+  "url": "https://haptic-beat-relay.sociobot.in",
+  "loadMs": 597,
+  "errors": [],
+  "a11y": {
+    "title": "Haptic Beat Relay — send beat cues to a friend",
+    "lang": "en",
+    "h1": 1,
+    "main": true,
+    "imgsMissingAlt": 0,
+    "buttonsUnlabeled": 0,
+    "textLength": 1175
+  }
+}
