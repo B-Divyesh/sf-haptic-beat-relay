@@ -13,6 +13,8 @@ command and verifies its live build identity before reporting success.
   viewports.
 - Rebuilt the sample beat layout as a desktop two-column stage. The start action,
   seeded 86% score, and three returned taps are visible without scrolling.
+- Gave the desktop sample heading its own wider column so it never runs beneath
+  the live-round panel.
 - Kept `?demo=1` and `/demo` isolated in page memory. The persistent banner
   offers reset and real-room exit actions.
 - Replaced the unproved audible fallback message with a visual-cue recovery

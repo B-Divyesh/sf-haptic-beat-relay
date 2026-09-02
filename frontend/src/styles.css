@@ -149,7 +149,7 @@ input::file-selector-button { min-height: 36px; margin-right: 12px; padding: 4px
 .sample-list div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--night-800); }
 .sample-list dt { color: var(--fog-300); }
 .sample-list dd { margin: 0; text-align: right; }
-.demo-topline { display: grid; grid-template-columns: minmax(300px, .72fr) minmax(440px, 1.28fr); align-items: start; gap: 48px; }
+.demo-topline { display: grid; grid-template-columns: minmax(390px, .9fr) minmax(440px, 1.1fr); align-items: start; gap: 48px; }
 .demo-live { margin-top: 0; padding: 24px 32px 28px; background: linear-gradient(145deg, #102635, #08131c); border-top: 2px solid var(--cyan-300); }
 .demo-live-top { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
 .demo-live-top .eyebrow { margin-bottom: 8px; }
