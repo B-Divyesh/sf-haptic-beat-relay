@@ -14,7 +14,7 @@
     "test:release-contract": "node scripts/verify-release-contract.mjs",
     "test:deployment-contract": "node scripts/verify-deploy-containerapp.mjs",
     "test:handoff-contract": "node scripts/verify-handoff-release.mjs",
-    "test:browser": "npm run build && playwright test",
+    "test:browser": "npm run build && cargo build --locked && playwright test",
     "test:clean-entrypoint": "node scripts/verify-clean-browser-entrypoint.mjs",
     "test:live-relay": "node scripts/verify-live-relay.mjs",
     "test:live-persistence": "node scripts/verify-live-persistence.mjs",
