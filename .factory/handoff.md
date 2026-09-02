@@ -19,13 +19,19 @@ in place.
 - Applied `cargo fmt --all` to the three reported Rust regions.
 - Added Rust format and strict Clippy checks to `npm test`. A formatting or lint
   regression now fails the required product gate.
+- The first guarded rollout reproduced an Azure Files restart edge: the room
+  row survived, but its optional expiry-index page did not. The next room write
+  failed with SQLite extended code 779. Migration 0003 removes both optional
+  expiry indexes; the small, short-lived tables remain efficient to scan.
+- Extended the live persistence gate. It now joins the pre-restart room and
+  creates a fresh room after restart, covering both durable reads and writes.
 
 ## Local evidence
 
 - Clean dependency install: `npm ci` installed 59 packages with no reported
   vulnerability.
 - Required gate: `npm test` passed 4 Vitest tests, Rust format, strict Clippy,
-  release/deployment/handoff contracts, 16 Rust tests, the clean browser entry
+  release/deployment/handoff contracts, 17 Rust tests, the clean browser entry
   check, and 42 Playwright tests with 8 intended project skips.
 - Timing stress: the exact 180 BPM browser claim passed 20 of 20 runs with two
   workers. It measured five haptic cues and enforced less than 110 ms error on

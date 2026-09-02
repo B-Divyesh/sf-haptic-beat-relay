@@ -76,11 +76,25 @@ const joinBody = await joinResponse.text();
 assert.equal(joinResponse.status, 200, `room ${room.code} was not restored from durable SQLite: ${joinBody}`);
 assert.match(JSON.parse(joinBody).companion_token, /^[A-Z0-9]{32}$/);
 
+// A row can survive while an expiry index page does not. The failed repair-24
+// rollout reproduced that exact Azure Files state: this join passed, then the
+// first new room failed with SQLITE_CORRUPT_INDEX. Require both the old read
+// and a fresh post-restart write before the persistence gate can pass.
+const postRestartCreate = await fetch(`${baseURL}/api/rooms`, {
+  method: 'POST',
+  cache: 'no-store',
+  headers: { 'X-Forwarded-For': '198.51.100.231' },
+});
+const postRestartBody = await postRestartCreate.text();
+assert.equal(postRestartCreate.status, 200, `post-restart room creation failed: ${postRestartBody}`);
+assert.match(JSON.parse(postRestartBody).code, /^[A-Z0-9]{6}$/);
+
 console.log(JSON.stringify({
   revision,
   replicaBefore: before.name,
   replicaAfter: after.name,
   room: room.code,
   persistedAcrossRestart: true,
+  writeAfterRestart: true,
   buildSha: expectedSha,
 }));

@@ -1250,6 +1250,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn regression_durable_schema_avoids_restart_fragile_expiry_indexes() {
+        let storage = tempfile::tempdir().unwrap();
+        let database_path = storage.path().join("relay.sqlite3");
+        let application = app_at(&database_path, ROOM_TTL).await;
+
+        let created = application
+            .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::OK);
+
+        let database = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(sqlite_connect_options(&database_path, false))
+            .await
+            .unwrap();
+        let optional_indexes: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM sqlite_schema WHERE type = 'index' AND name IN ('rooms_expires_at_idx', 'rate_limits_window_idx')",
+        )
+        .fetch_all(&database)
+        .await
+        .unwrap();
+        assert!(
+            optional_indexes.is_empty(),
+            "durable tables must not rewrite restart-fragile secondary index pages"
+        );
+    }
+
+    #[tokio::test]
     async fn regression_azure_files_uses_rollback_journal_and_waits_for_rollout_lock() {
         // The first durable /data rollout exposed that WAL cannot initialize
         // reliably on Azure Files. Hold an exclusive rollback-journal lock as
