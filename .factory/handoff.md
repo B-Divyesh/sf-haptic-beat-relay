@@ -10,11 +10,10 @@ mode, and moves the tap pad into view.
 ## Release identities
 
 - Implementation SHA: `eaa617649adcaf745ef3aac9e7740a85fc24ff94`
-- Documentation SHA: `f1441e4893d4c6f30bbf4d18262594c5b3fd7023`
+- Documentation SHA: `48f512029a30bb300a8b59d4c79f1942124eb69a`
 
 The implementation SHA is the immutable image, health identity, and active
-revision. The following release-metadata commit will point the documentation
-SHA at this post-deployment record.
+revision. The documentation SHA is the post-deployment handoff record.
 
 ## What changed
 
