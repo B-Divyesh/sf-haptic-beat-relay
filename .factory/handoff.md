@@ -51,6 +51,24 @@ non-zero shared scores, first-screen visibility, plain wording, and claim
 coverage. This repair retains the live implementation SHA while allowing later
 documentation commits to verify it correctly.
 
+From a new clone at `c9f5156`, `npm ci` and all 22 exact manifest commands
+passed. The clean local `npm test`, build, metadata regression, and clean
+browser-entry checks also passed. Live topology used the metadata default and
+confirmed one ready HTTP replica, the durable `/data` mount, the full image
+SHA, and matching health identity.
+
+The scoped persistence check restarted that replica. The pre-restart room
+joined after startup, a new room write succeeded, and health stayed on the
+implementation SHA. A new desktop host and 390 px friend then completed a
+fresh reconnecting relay round. The same post-restart client received 40 room
+requests, then five `429` responses with `Retry-After: 1`.
+
+Fresh desktop and phone route scans covered the landing, demo, host, join,
+privacy, terms, designed 404, and an unknown route. They found no serious or
+critical Axe issue. The one-click sample kept its label, reset to 86% and three
+returned taps, made no API request, and created no local or session storage.
+An offline demo reload also passed.
+
 ## Known gaps
 
 None. Docker is not installed in this worker, so the native locked Rust build
