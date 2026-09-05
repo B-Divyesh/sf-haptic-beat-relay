@@ -1,3 +1,46 @@
+# Haptic Beat Relay — verification 29 handoff
+
+## Verification outcome
+
+**PASS.** Independent QA reviewed implementation
+`1964c68a15d95639acddeaf011e778d479bc4895` at
+<https://haptic-beat-relay.sociobot.in>. No product code changed in this work
+order. The live `/health` identity matches that implementation.
+
+- All 22 claim commands in `.factory/claims.json` passed from a disposable
+  clean clone after `npm ci`; the first command also passed with an empty Rust
+  target cache.
+- `npm test`, `npm run build`, `verify-url.sh`, desktop/mobile Axe scans, and
+  the live 30-round relay, five-burst rate-limit, topology, and restart-
+  persistence checks passed.
+- The live app has one ready HTTP replica, durable `/data`, and a matching
+  full-SHA image. A restart preserved a room and accepted a new write.
+- Fresh desktop and phone views state the job, audience, and sample first
+  action before scrolling. The sample is isolated, labelled, resettable, and
+  makes no API or browser-storage change.
+
+Read the full evidence in `.factory/verification-29.md`. Evidence assets are
+under `.factory/evidence/verification-29/`.
+
+## Run and verify
+
+```sh
+npm ci
+npm test
+npm run build
+RELAY_ROUNDS=30 npm run test:live-relay
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
+RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-persistence
+```
+
+## Known limits
+
+Phone vibration and controller haptics depend on browser and device support;
+the visual cue remains available. Rooms and scores expire after two hours.
+
+---
+
 # Haptic Beat Relay — repair 25 handoff
 
 ## Outcome
