@@ -1,39 +1,63 @@
-# Haptic Beat Relay — review 5 handoff
+# Haptic Beat Relay — repair 27 candidate handoff
 
 ## Outcome
 
-**FAIL.** Review 5 found one P1 live browser issue: a friend who opens a
-copied join link receives no first phone vibration until they interact with
-the page. No product code changed. The full report is `.factory/review-5.md`.
+The copied-link vibration failure is repaired in the release candidate. A
+friend must choose **Enable vibration** before the host can start. That trusted
+tap activates Chromium's native vibration policy, confirms the available cue
+mode, and moves the tap pad into view.
 
-## Release identities
+## Release identities before deployment
 
 - Implementation SHA: `1964c68a15d95639acddeaf011e778d479bc4895`
-- Documentation SHA: `ae67bc7a5a260283b1f8e070cbbbaf6c49419b16`
-- Review base: `ae67bc7a5a260283b1f8e070cbbbaf6c49419b16`
+- Documentation SHA: `f1441e4893d4c6f30bbf4d18262594c5b3fd7023`
+- Repair candidate: the final checked-out commit passed to the guarded deploy
+  command below.
 
-The live health response, immutable image, revision, and topology match the
-implementation SHA. Later commits only repair or record verification.
+The implementation and documentation values above identify the live release
+before repair 27. Replace them with the deployed candidate in the final
+post-deployment record.
 
-## What was verified
+## What changed
 
-- All 22 exact claim commands passed from a fresh clone after `npm ci`.
-- `npm test`, `npm run build`, Rust format, and strict Clippy passed.
-- Fresh desktop and phone pages show the job, audience, sample action, and
-  three facts before scrolling.
-- The populated sample kept its demo label, reset to 86% and three taps, made
-  no API request, and wrote no browser storage.
-- A fresh host and phone friend exchanged a cue and showed the same score.
-  Invalid, unknown, and second-friend cases returned clear responses.
-- The checked-in browser suite covers Axe, keyboard, focus, 44 px targets,
-  200% text, reduced motion, offline reload, links, legal pages, route titles,
-  and the designed HTTP 404.
-- One HTTP replica uses durable SQLite under `/data`. Restart persistence,
-  health identity, tenant boundaries, relay recovery, and five exact
-  rate-limit bursts passed.
+- The joined friend view explains why one tap is required and keeps the action
+  inside the first 390 × 844 screen.
+- The host remains locked while a friend is merely connected. It unlocks only
+  after the friend's trusted activation signal.
+- The friend repeats that ready signal after either socket reconnects.
+- Unsupported phones keep the existing visual cue fallback.
+- The claims, public copy, design record, and live relay check now include the
+  activation step.
 
-Evidence is in `.factory/evidence/review-5/` and the full result is in
-`.factory/review-5.md`.
+## Regression coverage
+
+The `haptic-output` browser claim opens the copied room link in a fresh 390 px
+Chromium context. It proves these observable results:
+
+- no friend interaction leaves the host action disabled;
+- a programmatic click cannot unlock the host;
+- a trusted tap calls Chromium's native vibration function successfully;
+- the first relayed `45 ms` cue succeeds without the blocked-call error;
+- controller dual-rumble and the visual cue still run;
+- the active tap pad remains inside the phone viewport.
+
+The paired browser and live relay checks also perform the activation step
+before starting, including host and friend reconnection.
+
+## Verification before deployment
+
+- `npm ci`: passed with zero reported vulnerabilities.
+- `npm test`: passed all 4 unit, 3 release-identity, 18 Rust, clean-start,
+  formatting, strict Clippy, contract, and browser gates.
+- The browser suite passed 42 checks with 8 intended project skips, including
+  the native Chromium haptic claim in desktop and 390 px projects.
+- Thirty local reconnecting host/friend relay rounds passed with equal,
+  non-zero acknowledged scores.
+- Production build: JavaScript 27.99 KB raw / 9.25 KB gzip; CSS 18.40 KB raw /
+  4.76 KB gzip.
+
+Full clean claims, the complete local suite, live deployment checks, and cold
+HTTPS browser checks remain required before the final record.
 
 ## Run and verify
 
@@ -47,17 +71,15 @@ RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 ```
 
-For a newly deployed implementation, finish the handoff, commit, push, then
-run the guarded command and explicit identity check:
+For the release candidate, commit and push this handoff, then run:
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
 
-## Known gap and next step
+## Known gaps
 
-Before the host starts a round, require a friend who opened a copied link to
-tap an explicit Enable vibration control. State the reason and preserve the
-visual cue fallback. Update the haptic claim and its test to exercise a real
-browser's user-activation rule, then redeploy and repeat the copied-link test.
+Deployment and cold live verification are pending for this candidate. The
+browser still cannot guarantee vibration on hardware or browsers that do not
+support the API; the visual cue remains the stated fallback.
