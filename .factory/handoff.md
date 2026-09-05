@@ -1,19 +1,19 @@
-# Haptic Beat Relay — verification 30 handoff
+# Haptic Beat Relay — review 5 handoff
 
 ## Outcome
 
-**PASS.** Independent QA found zero findings at every severity and zero
-untested public claims. No product code changed. The full report is
-`.factory/verification-30.md`.
+**FAIL.** Review 5 found one P1 live browser issue: a friend who opens a
+copied join link receives no first phone vibration until they interact with
+the page. No product code changed. The full report is `.factory/review-5.md`.
 
 ## Release identities
 
 - Implementation SHA: `1964c68a15d95639acddeaf011e778d479bc4895`
-- Documentation SHA: `f1441e4893d4c6f30bbf4d18262594c5b3fd7023`
-- Verification base: `3976ed04a7b47b5d0db3b7808ca6c47b49145e27`
+- Documentation SHA: `ae67bc7a5a260283b1f8e070cbbbaf6c49419b16`
+- Review base: `ae67bc7a5a260283b1f8e070cbbbaf6c49419b16`
 
-The live health response, immutable image, revision, and frontend bytes match
-the implementation SHA. Later commits only repair or record verification.
+The live health response, immutable image, revision, and topology match the
+implementation SHA. Later commits only repair or record verification.
 
 ## What was verified
 
@@ -23,20 +23,17 @@ the implementation SHA. Later commits only repair or record verification.
   three facts before scrolling.
 - The populated sample kept its demo label, reset to 86% and three taps, made
   no API request, and wrote no browser storage.
-- A fresh host and phone friend exchanged a cue and showed the same non-zero
-  score. Invalid, unknown, and second-friend cases returned clear responses.
-- Sixteen live route/Axe checks found zero serious or critical issues. Keyboard,
-  focus, 44 px targets, 200% text, reduced motion, offline reload, links, legal
-  pages, route titles, and the designed HTTP 404 passed.
-- Lighthouse mobile scored 100 in Performance, Accessibility, Best Practices,
-  and SEO. LCP was 1.5 s, total blocking time 20 ms, and CLS 0.
+- A fresh host and phone friend exchanged a cue and showed the same score.
+  Invalid, unknown, and second-friend cases returned clear responses.
+- The checked-in browser suite covers Axe, keyboard, focus, 44 px targets,
+  200% text, reduced motion, offline reload, links, legal pages, route titles,
+  and the designed HTTP 404.
 - One HTTP replica uses durable SQLite under `/data`. Restart persistence,
-  post-restart writes, relay recovery, health identity, tenant boundaries, and
-  five exact rate-limit bursts passed.
-- A 100-request smoke with distinct client identities returned 100 successes.
+  health identity, tenant boundaries, relay recovery, and five exact
+  rate-limit bursts passed.
 
-Evidence is in `.factory/evidence/verification-30/`. The URL verifier result is
-`.factory/evidence/verification-30/verify-url/verify.json`.
+Evidence is in `.factory/evidence/review-5/` and the full result is in
+`.factory/review-5.md`.
 
 ## Run and verify
 
@@ -58,6 +55,9 @@ npm run deploy -- "$(git rev-parse HEAD)"
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
 
-## Known gaps and next steps
+## Known gap and next step
 
-None. No redeploy is needed for this report-only verification.
+Before the host starts a round, require a friend who opened a copied link to
+tap an explicit Enable vibration control. State the reason and preserve the
+visual cue fallback. Update the haptic claim and its test to exercise a real
+browser's user-activation rule, then redeploy and repeat the copied-link test.
