@@ -1,26 +1,28 @@
-# Haptic Beat Relay — verification 29 handoff
+# Haptic Beat Relay — review 4 handoff
 
-## Verification outcome
+## Outcome
 
-**PASS.** Independent QA reviewed implementation
-`1964c68a15d95639acddeaf011e778d479bc4895` at
-<https://haptic-beat-relay.sociobot.in>. No product code changed in this work
-order. The live `/health` identity matches that implementation.
+**FAIL.** Review 4 found one release-process defect and zero untested claims.
+The live product and its real host/friend flow pass. The exact
+`singleton-deployment` claim command fails because it treats the later
+documentation commit as the implementation that should be deployed.
 
-- All 22 claim commands in `.factory/claims.json` passed from a disposable
-  clean clone after `npm ci`; the first command also passed with an empty Rust
-  target cache.
-- `npm test`, `npm run build`, `verify-url.sh`, desktop/mobile Axe scans, and
-  the live 30-round relay, five-burst rate-limit, topology, and restart-
-  persistence checks passed.
-- The live app has one ready HTTP replica, durable `/data`, and a matching
-  full-SHA image. A restart preserved a room and accepted a new write.
-- Fresh desktop and phone views state the job, audience, and sample first
-  action before scrolling. The sample is isolated, labelled, resettable, and
-  makes no API or browser-storage change.
+The reviewed implementation is `1964c68`. The documentation base is
+`66b87c3`. The complete evidence and required resolution are in
+`.factory/review-4.md`. No product code changed during this review.
 
-Read the full evidence in `.factory/verification-29.md`. Evidence assets are
-under `.factory/evidence/verification-29/`.
+## Verified behavior
+
+- Fresh desktop and phone browsers showed the job, audience, sample action,
+  and all three facts before scrolling.
+- The sample stayed labeled, reset to its seeded 86% score, made no API call,
+  and created no browser storage entry.
+- A live host and phone friend connected, returned a keyboard tap, and showed
+  the same non-zero score.
+- The 30-round live relay, five-client allowance, explicit implementation
+  topology, and restart-persistence checks passed.
+- Build, Rust, clean-entry, full Playwright, live route, Axe, keyboard,
+  reduced-motion, privacy, link, legal-page, and designed-404 checks passed.
 
 ## Run and verify
 
@@ -30,109 +32,20 @@ npm test
 npm run build
 RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
-RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
-RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-persistence
+RELAY_EXPECTED_SHA="$(git rev-parse 1964c68)" npm run test:live-topology
+RELAY_EXPECTED_SHA="$(git rev-parse 1964c68)" npm run test:live-persistence
 ```
 
-## Known limits
-
-Phone vibration and controller haptics depend on browser and device support;
-the visual cue remains available. Rooms and scores expire after two hours.
-
----
-
-# Haptic Beat Relay — repair 25 handoff
-
-## Outcome
-
-The release blocker in independent verification 28 is repaired. Browser claim
-commands now compile the locked Rust backend before Playwright starts its
-web-server timer, so a cold target cache cannot consume that timer. The runtime,
-sample sandbox, relay behavior, privacy model, visual design, and deployment
-topology are unchanged.
-
-## Reproduction and root cause
-
-- The verifier's clean candidate run compiled inside Playwright's 120-second
-  startup window and timed out immediately after the 1 minute 59 second build.
-- A clean local checkout of the same candidate confirmed that `cargo run` was
-  the Playwright web-server command. This four-core runner finished in 1 minute,
-  so it narrowly passed instead of timing out. A one-job replay took 1 minute
-  56 seconds, leaving only four seconds of the same unsafe startup allowance.
-- The fault was not the demo. Compilation and server readiness incorrectly
-  shared one timeout.
-
-## Repair and regression coverage
-
-- `npm run test:browser` now runs the production frontend build and a locked
-  Rust debug build before it invokes Playwright.
-- The prebuild receives the fixed 40-character browser-test identity. The
-  `/health` claim therefore still proves the exact expected build SHA.
-- Playwright starts `./target/debug/haptic-beat-relay` directly. It no longer
-  runs Cargo or compiles dependencies inside `webServer.timeout`.
-- `scripts/verify-clean-browser-entrypoint.mjs` now rejects a browser command
-  that does not prebuild Rust, a Playwright server command containing
-  `cargo run`, or a prebuild that omits the test identity. It still deletes the
-  built frontend and proves the public browser command recreates it.
-- From a fresh clone with no `node_modules`, `frontend/dist`, or `target`, the
-  repaired first claim compiled Rust for 58.66 seconds before Playwright
-  started. Both desktop and 390 px sample cases then passed in 16.3 seconds.
-
-## Local verification
-
-- `npm ci`: 59 packages installed; 0 reported vulnerabilities.
-- `npm test`: PASS — 4 Vitest tests, Rust formatting, strict Clippy, release,
-  deployment, and handoff contracts, 18 Rust tests, the clean browser-entry
-  regression, and 42 Playwright tests; 8 intentional viewport skips.
-- `npm run build`: PASS — JavaScript 26.10 KB raw / 8.76 KB gzip and CSS
-  17.67 KB raw / 4.62 KB gzip under `frontend/dist/`.
-- `cargo build --release --locked`: PASS from a clean release cache in
-  2 minutes 1 second.
-- Runtime contract: the release binary started with only `PATH` and
-  `PORT=18080`, selected its executable-directory SQLite fallback, and
-  `/health` returned `{"build_sha":"dev","status":"ok"}`.
-- Load smoke: 100 concurrent room creations from 100 forwarded client
-  identities returned 100 HTTP 200 responses.
-- Browser coverage: desktop 1440 × 900 and mobile 390 × 844, keyboard and
-  visible focus, every route at 200% text, 44 px touch targets, reduced motion,
-  form-error focus, route titles, offline service-worker reload, response
-  headers, privacy request capture, haptic fallbacks, and serious/critical axe
-  checks all passed.
-- URL verifier: 578 ms local load, no console errors, `lang=en`, one `h1`, one
-  `main`, complete image alt text, and labeled buttons. Desktop and mobile
-  screenshots are under `.factory/evidence/repair-25/local/`.
-- Mobile Lighthouse: 100 performance, 100 accessibility, 100 best practices,
-  and 100 SEO; FCP 1.1 s, LCP 1.8 s, TBT 30 ms, CLS 0. The report is
-  `.factory/evidence/repair-25/lighthouse-mobile.json`.
-- `git diff --check`: PASS.
-
-## Claim and release verification
-
-- From a new clone with empty dependency, frontend-build, and Rust-target
-  caches, `npm ci` and all 22 exact commands in `.factory/claims.json` passed
-  in manifest order.
-- The first command proved the repaired cold path. Subsequent commands covered
-  the 12-second 104 BPM sample, local audio, same-origin privacy, account-free
-  rooms, copy recovery, shared scores, haptics, keyboard input, 60-second real
-  rounds, durable expiry, database selection, public records, and live gates.
-- The guarded deployment passed its build, one-revision/one-ready-replica
-  topology, HTTP ingress, durable `/data` mount, restart persistence, 30 API
-  and 30 reconnecting browser relay rounds, five exact rate-limit bursts, and
-  final stability/identity check.
-- The live URL verifier passed at desktop and 390 px mobile with no console
-  error. Live `/health`, image tag, revision suffix, and built asset hashes
-  matched the released commit.
-
-Release commands:
+The release workflow retains these guarded implementation commands. They are
+not commands for deploying a later report-only commit:
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
 
-## Known limits
+## Remaining work
 
-Phone vibration and controller haptics still depend on browser and device
-support; the visual cue remains available. Rooms and scores are deliberately
-ephemeral and expire after two hours. No new service, secret, analytics,
-payment, AI dependency, storage account, or infrastructure resource was added.
+Make the exact manifest topology command read the deployed implementation SHA
+from release metadata. Do not redeploy this report-only commit. Rerun all 22
+claim commands from a clean checkout; all must exit zero before PASS.
