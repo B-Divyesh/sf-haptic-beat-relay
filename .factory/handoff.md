@@ -1,28 +1,27 @@
-# Haptic Beat Relay — review 4 handoff
+# Haptic Beat Relay — repair 26 handoff
 
 ## Outcome
 
-**FAIL.** Review 4 found one release-process defect and zero untested claims.
-The live product and its real host/friend flow pass. The exact
-`singleton-deployment` claim command fails because it treats the later
-documentation commit as the implementation that should be deployed.
+**PASS.** The live relay remains the reviewed implementation. Repair 26 fixes
+the release check that previously mistook a later review commit for a deployed
+application image. No product behavior changed and no redeployment was needed.
 
-The reviewed implementation is `1964c68`. The documentation base is
-`66b87c3`. The complete evidence and required resolution are in
-`.factory/review-4.md`. No product code changed during this review.
+## Release identities
 
-## Verified behavior
+- Implementation SHA: `1964c68a15d95639acddeaf011e778d479bc4895`
+- Documentation SHA: `f1441e4893d4c6f30bbf4d18262594c5b3fd7023`
 
-- Fresh desktop and phone browsers showed the job, audience, sample action,
-  and all three facts before scrolling.
-- The sample stayed labeled, reset to its seeded 86% score, made no API call,
-  and created no browser storage entry.
-- A live host and phone friend connected, returned a keyboard tap, and showed
-  the same non-zero score.
-- The 30-round live relay, five-client allowance, explicit implementation
-  topology, and restart-persistence checks passed.
-- Build, Rust, clean-entry, full Playwright, live route, Axe, keyboard,
-  reduced-motion, privacy, link, legal-page, and designed-404 checks passed.
+`.factory/release.json` records those separate roles. The default topology and
+persistence checks now use its implementation SHA. A guarded deployment still
+passes its candidate SHA explicitly.
+
+## What changed
+
+- Added release metadata for the live implementation and the later report.
+- Made topology and persistence verification use that metadata by default.
+- Added three outcome tests for metadata defaulting, guarded overrides, and
+  invalid identity rejection.
+- Updated the live topology command in the README to use release metadata.
 
 ## Run and verify
 
@@ -30,22 +29,29 @@ The reviewed implementation is `1964c68`. The documentation base is
 npm ci
 npm test
 npm run build
+npm run test:live-topology
+npm run test:live-persistence
 RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
-RELAY_EXPECTED_SHA="$(git rev-parse 1964c68)" npm run test:live-topology
-RELAY_EXPECTED_SHA="$(git rev-parse 1964c68)" npm run test:live-persistence
 ```
 
-The release workflow retains these guarded implementation commands. They are
-not commands for deploying a later report-only commit:
+For a newly deployed implementation, finish the handoff, commit, push, then
+run the guarded command and explicit identity check:
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
 RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 ```
 
-## Remaining work
+## Verification status
 
-Make the exact manifest topology command read the deployed implementation SHA
-from release metadata. Do not redeploy this report-only commit. Rerun all 22
-claim commands from a clean checkout; all must exit zero before PASS.
+The historical findings are closed: clean browser startup, strict formatting,
+one HTTP replica with `/data`, durable restart recovery, exact request limits,
+non-zero shared scores, first-screen visibility, plain wording, and claim
+coverage. This repair retains the live implementation SHA while allowing later
+documentation commits to verify it correctly.
+
+## Known gaps
+
+None. Docker is not installed in this worker, so the native locked Rust build
+and the deployed container health/topology checks are the available evidence.

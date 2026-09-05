@@ -43,7 +43,7 @@ Check the live service with:
 ```sh
 RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
-RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
+npm run test:live-topology
 ```
 
 ## How it works

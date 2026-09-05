@@ -9,6 +9,7 @@
     "start": "cargo run --release",
     "deploy": "sh scripts/deploy-containerapp.sh",
     "test:unit": "vitest run --config frontend/vitest.config.ts",
+    "test:release-identity": "node --test tests/release-identity.test.mjs",
     "test:format": "cargo fmt --all -- --check",
     "test:lint": "cargo clippy --all-targets --all-features --locked -- -D warnings",
     "test:release-contract": "node scripts/verify-release-contract.mjs",
@@ -20,7 +21,7 @@
     "test:live-persistence": "node scripts/verify-live-persistence.mjs",
     "test:live-rate-limit": "node scripts/verify-live-rate-limit.mjs",
     "test:live-topology": "node scripts/verify-live-topology.mjs",
-    "test": "npm run test:unit && npm run test:format && npm run test:lint && npm run test:release-contract && npm run test:deployment-contract && npm run test:handoff-contract && cargo test && npm run test:clean-entrypoint && playwright test"
+    "test": "npm run test:unit && npm run test:release-identity && npm run test:format && npm run test:lint && npm run test:release-contract && npm run test:deployment-contract && npm run test:handoff-contract && cargo test && npm run test:clean-entrypoint && playwright test"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",

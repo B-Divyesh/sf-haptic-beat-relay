@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { readReleaseMetadata, releaseMetadataFile, resolveExpectedSha } from './release-identity.mjs';
 
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
 const backendSource = readFileSync(new URL('../src/lib.rs', import.meta.url), 'utf8');
@@ -27,6 +28,17 @@ console.log(`release contract ok: ${rustBuilder[1]}`);
 
 const deployment = JSON.parse(readFileSync(new URL('../deploy/containerapp.json', import.meta.url), 'utf8'));
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const release = readReleaseMetadata(releaseMetadataFile);
+assert.equal(
+  resolveExpectedSha({ explicitSha: undefined, releaseFile: releaseMetadataFile }),
+  release.implementation_sha,
+  'documentation-only commits must not change the topology check identity',
+);
+assert.equal(
+  resolveExpectedSha({ explicitSha: '0123456789abcdef0123456789abcdef01234567', releaseFile: releaseMetadataFile }),
+  '0123456789abcdef0123456789abcdef01234567',
+  'guarded deployments must be able to verify their explicit candidate identity',
+);
 assert.equal(deployment.containerApp, 'sf-haptic-beat-relay');
 assert.equal(deployment.activeRevisionsMode, 'Single');
 assert.deepEqual(

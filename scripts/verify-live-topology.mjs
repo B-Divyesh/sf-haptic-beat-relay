@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { resolveExpectedSha } from './release-identity.mjs';
 
 // @claim:singleton-deployment
 
@@ -8,8 +9,7 @@ const deployment = JSON.parse(readFileSync(new URL('../deploy/containerapp.json'
 const resourceGroup = process.env.RELAY_RESOURCE_GROUP ?? deployment.resourceGroup;
 const appName = process.env.RELAY_CONTAINER_APP ?? deployment.containerApp;
 const baseURL = (process.env.RELAY_BASE_URL ?? 'https://haptic-beat-relay.sociobot.in').replace(/\/$/, '');
-const expectedSha = process.env.RELAY_EXPECTED_SHA
-  ?? execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const expectedSha = resolveExpectedSha();
 
 function az(args) {
   return execFileSync('az', args, { encoding: 'utf8' }).trim();
