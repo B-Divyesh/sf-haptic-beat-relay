@@ -1,22 +1,20 @@
-# Haptic Beat Relay — repair 27 candidate handoff
+# Haptic Beat Relay — repair 27 handoff
 
 ## Outcome
 
-The copied-link vibration failure is repaired in the release candidate. A
+The copied-link vibration failure is repaired and deployed. A
 friend must choose **Enable vibration** before the host can start. That trusted
 tap activates Chromium's native vibration policy, confirms the available cue
 mode, and moves the tap pad into view.
 
-## Release identities before deployment
+## Release identities
 
-- Implementation SHA: `1964c68a15d95639acddeaf011e778d479bc4895`
+- Implementation SHA: `eaa617649adcaf745ef3aac9e7740a85fc24ff94`
 - Documentation SHA: `f1441e4893d4c6f30bbf4d18262594c5b3fd7023`
-- Repair candidate: the final checked-out commit passed to the guarded deploy
-  command below.
 
-The implementation and documentation values above identify the live release
-before repair 27. Replace them with the deployed candidate in the final
-post-deployment record.
+The implementation SHA is the immutable image, health identity, and active
+revision. The following release-metadata commit will point the documentation
+SHA at this post-deployment record.
 
 ## What changed
 
@@ -56,8 +54,20 @@ before starting, including host and friend reconnection.
 - Production build: JavaScript 27.99 KB raw / 9.25 KB gzip; CSS 18.40 KB raw /
   4.76 KB gzip.
 
-Full clean claims, the complete local suite, live deployment checks, and cold
-HTTPS browser checks remain required before the final record.
+## Deployment verification
+
+- The guarded deployment built and pushed the full-SHA image.
+- One active HTTP revision runs one ready replica with durable SQLite at
+  `/data`.
+- A room remained joinable across a scoped restart, and a new write worked.
+- All 30 live API rooms and 30 reconnecting desktop/phone pairs passed.
+- Five clients each received 40 successful requests, then five `429` responses
+  with `Retry-After: 1`.
+- The final stability check still reported the exact implementation SHA and
+  singleton topology after 60 seconds.
+
+The clean declared-claim pass and cold HTTPS browser checks remain for the
+final verification record.
 
 ## Run and verify
 
@@ -71,7 +81,7 @@ RELAY_ROUNDS=30 npm run test:live-relay
 RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
 ```
 
-For the release candidate, commit and push this handoff, then run:
+For a future release candidate, commit and push its handoff, then run:
 
 ```sh
 npm run deploy -- "$(git rev-parse HEAD)"
@@ -80,6 +90,5 @@ RELAY_EXPECTED_SHA="$(git rev-parse HEAD)" npm run test:live-topology
 
 ## Known gaps
 
-Deployment and cold live verification are pending for this candidate. The
-browser still cannot guarantee vibration on hardware or browsers that do not
-support the API; the visual cue remains the stated fallback.
+Physical vibration still depends on browser and device support. The product
+states that limitation and keeps the visual cue fallback.
