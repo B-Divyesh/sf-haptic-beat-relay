@@ -49,9 +49,10 @@ npm run test:live-topology
 ## How it works
 
 - The host opens a room and gets a six-character code.
-- One friend joins with that code.
+- One friend joins with that code and chooses **Enable vibration**.
 - Both devices reconnect and recover the shared score.
-- The friend receives phone and controller vibration when supported.
+- The host can start after the friend enables cues.
+- Each cue uses phone and controller vibration when supported.
 - The screen flashes each cue when vibration is unavailable.
 
 Room records expire after two hours.

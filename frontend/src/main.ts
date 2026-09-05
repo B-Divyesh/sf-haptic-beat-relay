@@ -132,7 +132,7 @@ function landingPage(): string {
       <section class="preview-section" aria-labelledby="preview-title">
         <div>
           <h2 id="preview-title">See the same round on both devices</h2>
-          <p>The host sets the pace. Your friend feels each cue and taps the beat back.</p>
+          <p>The host sets the pace. Your friend enables vibration, feels each cue, and taps the beat back.</p>
         </div>
         <div class="signal-stage" aria-label="Preview of a connected room">
           <div class="stage-status"><span class="live-dot"></span> Paired with your friend</div>
@@ -148,7 +148,7 @@ function landingPage(): string {
         <ol class="steps">
           <li><strong>Create a room.</strong><span>Share its six-character code with one friend.</span></li>
           <li><strong>Set the beat.</strong><span>Choose the tempo or load an audio loop from your device.</span></li>
-          <li><strong>Tap it back.</strong><span>Your friend feels each cue and builds a shared score.</span></li>
+          <li><strong>Enable cues and tap.</strong><span>Your friend enables vibration, then taps each cue to build a shared score.</span></li>
         </ol>
       </section>
 
@@ -158,6 +158,7 @@ function landingPage(): string {
         </div>
         <div class="prose">
           <p>Phone vibration and controller vibration vary by browser and device.</p>
+          <p>Your friend taps Enable vibration before the round starts.</p>
           <p>The screen still flashes each cue when vibration is unavailable.</p>
           <p>Room records expire automatically after two hours.</p>
         </div>
@@ -188,7 +189,7 @@ function hostPage(): string {
           <input id="audio-loop" type="file" accept="audio/*" />
           <p class="file-name" id="file-name">No audio loop selected.</p>
           <button class="button primary wide" id="start-round" type="button" disabled>Start 60-second round</button>
-          <p class="control-help">The button activates when your friend joins.</p>
+          <p class="control-help">The button activates after your friend enables cues.</p>
         </section>
         ${roundPanel('Waiting for a friend', 0, 0)}
       </div>
@@ -216,6 +217,12 @@ function companionPage(code = ''): string {
       <button class="button primary" type="submit">Join the room</button>
     </form>` : `<section class="companion-stage" aria-labelledby="cue-title">
       <p class="connection-state" id="connection-state" aria-live="polite"><span class="status-dot"></span> Joining room ${code}…</p>
+      <section class="cue-permission" aria-labelledby="vibration-title">
+        <h2 id="vibration-title">Enable vibration before the round</h2>
+        <p class="vibration-help">Tap once so your browser can allow phone vibration. Visual cues still work if vibration is unavailable.</p>
+        <button class="button primary wide" id="enable-vibration" type="button" disabled>Enable vibration</button>
+        <p class="control-help" id="vibration-state" aria-live="polite">The host waits for this step.</p>
+      </section>
       <h2 id="cue-title">Tap when you feel the cue</h2>
       <button class="tap-pad" id="tap-pad" type="button" disabled><span>Tap the beat</span><small>Press Space or tap</small></button>
       <div class="score-readout"><span>Shared accuracy</span><strong id="score-value">0%</strong></div>
@@ -382,6 +389,7 @@ async function setupHost(): Promise<void> {
   const fileName = document.querySelector<HTMLElement>('#file-name')!;
   let socket: RelaySocket | undefined;
   let paired = false;
+  let friendReady = false;
   let roundActive = false;
   let stopBeatClock: (() => void) | undefined;
   let finishTimer: number | undefined;
@@ -430,8 +438,14 @@ async function setupHost(): Promise<void> {
     socket = openRoomSocket(room.code, 'host', room.host_token, (message) => {
       if (message.type === 'presence' && message.role === 'companion') {
         paired = Boolean(message.connected);
-        state.innerHTML = `<span class="status-dot ${paired ? 'connected' : ''}"></span>${paired ? 'Your friend is connected. The round is ready.' : 'Your friend left. Share the code to reconnect.'}`;
-        start.disabled = !paired || roundActive;
+        friendReady = false;
+        state.innerHTML = `<span class="status-dot ${paired ? 'connected' : ''}"></span>${paired ? 'Your friend joined. Waiting for them to enable cues.' : 'Your friend left. Share the code to reconnect.'}`;
+        start.disabled = !paired || !friendReady || roundActive;
+      }
+      if (message.type === 'haptic_ready' && paired) {
+        friendReady = true;
+        state.innerHTML = '<span class="status-dot connected"></span>Your friend enabled cues. The round is ready.';
+        start.disabled = roundActive;
       }
       if (
         message.type === 'tap'
@@ -491,6 +505,7 @@ async function setupHost(): Promise<void> {
     }, (connectionState) => {
       if (connectionState === 'reconnecting') {
         paired = false;
+        friendReady = false;
         state.innerHTML = '<span class="status-dot"></span>Relay interrupted. Reconnecting…';
         start.disabled = true;
       } else if (connectionState === 'open') {
@@ -510,7 +525,7 @@ async function setupHost(): Promise<void> {
     });
 
     start.addEventListener('click', () => {
-      if (!paired || !socket?.isOpen()) return;
+      if (!paired || !friendReady || !socket?.isOpen()) return;
       round += 1;
       roundActive = true;
       scores = [];
@@ -637,7 +652,10 @@ async function setupCompanion(code: string): Promise<void> {
   const state = document.querySelector<HTMLElement>('#connection-state')!;
   const pad = document.querySelector<HTMLButtonElement>('#tap-pad')!;
   const roundState = document.querySelector<HTMLElement>('#round-state')!;
+  const enableVibration = document.querySelector<HTMLButtonElement>('#enable-vibration')!;
+  const vibrationState = document.querySelector<HTMLElement>('#vibration-state')!;
   let socket: RelaySocket | undefined;
+  let cuesEnabled = false;
   let roundActive = false;
   let round = 0;
   let tapId = 0;
@@ -668,6 +686,36 @@ async function setupCompanion(code: string): Promise<void> {
     acknowledgeScore(message);
   };
 
+  const announceReady = () => {
+    if (cuesEnabled) socket?.send(JSON.stringify({ type: 'haptic_ready' }));
+  };
+
+  enableVibration.addEventListener('click', (event) => {
+    if (!event.isTrusted || (navigator.userActivation && !navigator.userActivation.isActive)) {
+      vibrationState.textContent = 'Tap Enable vibration yourself so the browser can allow cues.';
+      return;
+    }
+    let phoneVibrated = false;
+    try {
+      phoneVibrated = typeof navigator.vibrate === 'function' && navigator.vibrate(30);
+    } catch {
+      phoneVibrated = false;
+    }
+    cuesEnabled = true;
+    enableVibration.disabled = true;
+    enableVibration.textContent = phoneVibrated ? 'Vibration enabled' : 'Visual cues enabled';
+    vibrationState.textContent = phoneVibrated
+      ? 'Vibration is enabled. The host can start.'
+      : 'Vibration is unavailable here. Visual cues are ready, and the host can start.';
+    document.querySelector('#vibration-title')!.textContent = 'Cues ready';
+    document.querySelector('.companion-stage')?.classList.add('cues-ready');
+    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    pad.scrollIntoView({ block: 'center' });
+    requestAnimationFrame(() => { document.documentElement.style.scrollBehavior = previousScrollBehavior; });
+    announceReady();
+  });
+
   cleanupPage = () => socket?.close();
   try {
     let response: Response | undefined;
@@ -683,6 +731,7 @@ async function setupCompanion(code: string): Promise<void> {
     socket = openRoomSocket(code, 'companion', body.companion_token, (message) => {
       if (message.type === 'presence' && message.role === 'host') {
         state.innerHTML = `<span class="status-dot ${message.connected ? 'connected' : ''}"></span>${message.connected ? `Connected to room ${code}` : 'The host left this room.'}`;
+        if (message.connected) announceReady();
       }
       if (message.type === 'round_start') {
         roundActive = true;
@@ -721,6 +770,8 @@ async function setupCompanion(code: string): Promise<void> {
         pad.disabled = true;
       } else if (connectionState === 'open') {
         state.innerHTML = `<span class="status-dot connected"></span>Connected to room ${code}`;
+        enableVibration.disabled = cuesEnabled;
+        announceReady();
       }
     });
   } catch (cause) {

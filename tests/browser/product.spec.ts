@@ -5,6 +5,13 @@ import { readFileSync } from 'node:fs';
 
 const testBuildSha = '0123456789abcdef0123456789abcdef01234567';
 
+async function enableFriendCues(page: Page): Promise<void> {
+  const enable = page.getByRole('button', { name: 'Enable vibration' });
+  await expect(enable).toBeEnabled();
+  await enable.click();
+  await expect(page.locator('#vibration-state')).toContainText('host can start');
+}
+
 // The product keys limits by the first forwarded client address. Give each
 // browser test a stable, separate identity so a claim's intentional 45-request
 // burst cannot spend the allowance used by an unrelated test or viewport.
@@ -169,7 +176,8 @@ test('@claim:tempo-and-loop-controls a host chooses a tempo and loads a local au
   await friendContext.addInitScript(() => {
     Object.defineProperty(navigator, 'vibrate', {
       configurable: true,
-      value: () => {
+      value: (duration: number) => {
+        if (duration !== 45) return true;
         const cueWindow = window as Window & { cueMarks?: number[] };
         cueWindow.cueMarks ??= [];
         cueWindow.cueMarks.push(performance.now());
@@ -190,6 +198,7 @@ test('@claim:tempo-and-loop-controls a host chooses a tempo and loads a local au
   const code = await host.locator('#room-code').textContent();
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
   await friend.goto(`/join/${code}`);
+  await enableFriendCues(friend);
   await expect(host.getByRole('button', { name: 'Start 60-second round' })).toBeEnabled();
   await host.getByRole('button', { name: 'Start 60-second round' }).click();
   await expect.poll(() => friend.evaluate(() => (
@@ -329,6 +338,8 @@ test('@claim:shared-score @claim:visual-cue a companion joins, flashes each cue,
 
   await companion.goto(`/join/${code}`);
   await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+  await enableFriendCues(companion);
+  await expect(companion.locator('#vibration-state')).toContainText('Vibration is unavailable here');
   await expect(host.getByRole('button', { name: 'Start 60-second round' })).toBeEnabled();
   await host.locator('#bpm').fill('180');
   await host.getByRole('button', { name: 'Start 60-second round' }).click();
@@ -354,6 +365,7 @@ test('@claim:space-key-tap Space returns a tap in a joined room', async ({ brows
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
   await companion.goto(`/join/${code}`);
   await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+  await enableFriendCues(companion);
   await host.getByRole('button', { name: 'Start 60-second round' }).click();
   const pad = companion.getByRole('button', { name: /Tap the beat/ });
   await expect(pad).toBeEnabled();
@@ -364,24 +376,35 @@ test('@claim:space-key-tap Space returns a tap in a joined room', async ({ brows
   await companionContext.close();
 });
 
-test('@claim:haptic-output a supported phone and controller receive each companion cue', async ({ browser }) => {
+test('@claim:haptic-output a real browser activation enables phone and controller cues', async ({ browser }) => {
   const hostContext = await browser.newContext({
     extraHTTPHeaders: { 'X-Forwarded-For': '198.18.85.45' },
   });
+  await hostContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:8080' });
   const companionContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
     extraHTTPHeaders: { 'X-Forwarded-For': '198.18.86.45' },
   });
   await companionContext.addInitScript(() => {
     const calls = {
-      phone: [] as number[],
+      phone: [] as Array<{ duration: number; allowed: boolean; active: boolean; hasBeenActive: boolean }>,
       controller: [] as Array<{ type: string; duration: number; strongMagnitude: number; weakMagnitude: number }>,
     };
     Object.defineProperty(window, '__hapticCalls', { configurable: true, value: calls });
+    const nativeVibrate = navigator.vibrate.bind(navigator);
     Object.defineProperty(navigator, 'vibrate', {
       configurable: true,
       value: (duration: number) => {
-        calls.phone.push(duration);
-        return true;
+        const allowed = nativeVibrate(duration);
+        calls.phone.push({
+          duration,
+          allowed,
+          active: navigator.userActivation.isActive,
+          hasBeenActive: navigator.userActivation.hasBeenActive,
+        });
+        return allowed;
       },
     });
     Object.defineProperty(navigator, 'getGamepads', {
@@ -399,19 +422,51 @@ test('@claim:haptic-output a supported phone and controller receive each compani
 
   const host = await hostContext.newPage();
   const companion = await companionContext.newPage();
+  const companionErrors: string[] = [];
+  companion.on('console', (message) => {
+    if (message.type() === 'error') companionErrors.push(message.text());
+  });
   await host.goto('/host');
   await expect(host.locator('#room-code')).toHaveText(/^[A-Z0-9]{6}$/);
   const code = await host.locator('#room-code').textContent();
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
-  await companion.goto(`/join/${code}`);
+  await host.getByRole('button', { name: 'Copy room link' }).click();
+  const copiedJoinLink = await host.evaluate(() => navigator.clipboard.readText());
+  expect(copiedJoinLink).toBe(`http://127.0.0.1:8080/join/${code}`);
+  await companion.goto(copiedJoinLink);
   await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
 
+  const start = host.getByRole('button', { name: 'Start 60-second round' });
+  const enableBox = await companion.locator('#enable-vibration').boundingBox();
+  expect(enableBox).not.toBeNull();
+  expect(enableBox!.y + enableBox!.height).toBeLessThanOrEqual(844);
+  await expect(start).toBeDisabled();
+  await companion.locator('#enable-vibration').evaluate((button: HTMLButtonElement) => button.click());
+  await expect(companion.locator('#vibration-state')).toHaveText('Tap Enable vibration yourself so the browser can allow cues.');
+  await expect(start).toBeDisabled();
+
+  await enableFriendCues(companion);
+  await expect(companion.locator('#vibration-state')).toHaveText('Vibration is enabled. The host can start.');
+  await expect(start).toBeEnabled();
+  await expect.poll(async () => {
+    const box = await companion.locator('#tap-pad').boundingBox();
+    return box ? { top: Math.round(box.y), bottom: Math.round(box.y + box.height) } : null;
+  }).toEqual(expect.objectContaining({ top: expect.any(Number), bottom: expect.any(Number) }));
+  const tapBox = await companion.locator('#tap-pad').boundingBox();
+  expect(tapBox!.y).toBeGreaterThanOrEqual(0);
+  expect(tapBox!.y + tapBox!.height).toBeLessThanOrEqual(844);
+
   await host.locator('#bpm').fill('180');
-  await host.getByRole('button', { name: 'Start 60-second round' }).click();
+  await start.click();
   await expect.poll(() => companion.evaluate(() => {
-    const calls = (window as unknown as { __hapticCalls: { phone: number[] } }).__hapticCalls;
+    const calls = (window as unknown as {
+      __hapticCalls: { phone: Array<{ duration: number; allowed: boolean; active: boolean; hasBeenActive: boolean }> };
+    }).__hapticCalls;
     return calls.phone;
-  })).toContain(45);
+  })).toEqual(expect.arrayContaining([
+    expect.objectContaining({ duration: 30, allowed: true, active: true, hasBeenActive: true }),
+    expect.objectContaining({ duration: 45, allowed: true, hasBeenActive: true }),
+  ]));
   await expect.poll(() => companion.evaluate(() => {
     const calls = (window as unknown as {
       __hapticCalls: {
@@ -425,6 +480,7 @@ test('@claim:haptic-output a supported phone and controller receive each compani
     strongMagnitude: 0.7,
     weakMagnitude: 0.4,
   });
+  expect(companionErrors).toEqual([]);
 
   await hostContext.close();
   await companionContext.close();
@@ -448,6 +504,7 @@ test('@claim:real-round-duration a real round completes after 60 seconds', async
   expect(code).toMatch(/^[A-Z0-9]{6}$/);
   await companion.goto(`/join/${code}`);
   await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+  await enableFriendCues(companion);
 
   const start = host.getByRole('button', { name: 'Start 60-second round' });
   await expect(start).toBeEnabled();
@@ -512,6 +569,8 @@ test('regression: 30 delayed-score rounds reconnect both devices and agree befor
     expect(code, `room ${attempt} has a code`).toMatch(/^[A-Z0-9]{6}$/);
     await companion.goto(`/join/${code}`);
     await expect(companion.locator('#connection-state')).toContainText(`Connected to room ${code}`);
+
+    await enableFriendCues(companion);
 
     await expect.poll(() => hostConnections).toBe(1);
     await hostSocket!.close({ code: 1012, reason: 'regression host reconnect' });

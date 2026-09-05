@@ -126,6 +126,9 @@ try {
         { timeout: 10_000 },
       );
       await host.getByRole('button', { name: 'Start 60-second round' }).waitFor({ state: 'visible' });
+      assert.equal(await host.locator('#start-round').isDisabled(), true, `round ${attempt}: host started before friend enabled cues`);
+      await companion.getByRole('button', { name: 'Enable vibration' }).click();
+      await companion.locator('#vibration-state').waitFor({ state: 'visible' });
       await host.waitForFunction(() => !(document.querySelector('#start-round')).disabled, undefined, { timeout: 10_000 });
       await waitUntil(() => hostConnections === 1, `round ${attempt} initial host socket`);
       await hostSocket.close({ code: 1012, reason: 'live regression host reconnect' });

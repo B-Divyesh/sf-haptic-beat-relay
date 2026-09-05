@@ -815,6 +815,9 @@ fn allowed_room_message(role: &str, value: &serde_json::Value) -> bool {
         return false;
     };
     match (role, kind) {
+        ("companion", "haptic_ready") => {
+            value.as_object().is_some_and(|message| message.len() == 1)
+        }
         ("companion", "tap") => {
             value.get("at").and_then(|item| item.as_i64()).is_some()
                 && valid_round(value)
@@ -1899,6 +1902,10 @@ mod tests {
             &json!({ "type": "score_ack", "score": 78, "round": 1, "tap_count": 1 })
         ));
         assert!(allowed_room_message(
+            "companion",
+            &json!({ "type": "haptic_ready" })
+        ));
+        assert!(allowed_room_message(
             "host",
             &json!({ "type": "score", "score": 78, "round": 1, "tap_count": 1 })
         ));
@@ -1913,6 +1920,10 @@ mod tests {
         assert!(!allowed_room_message(
             "companion",
             &json!({ "type": "round_start", "bpm": 104, "duration": 60 })
+        ));
+        assert!(!allowed_room_message(
+            "host",
+            &json!({ "type": "haptic_ready" })
         ));
         assert!(!allowed_room_message(
             "host",

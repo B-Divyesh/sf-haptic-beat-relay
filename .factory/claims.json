@@ -64,10 +64,10 @@
   },
   {
     "id": "shared-score",
-    "claim": "A friend joining enables the host round button, receives each cue, taps back, and builds a shared accuracy score.",
+    "claim": "A friend joins, enables cues, then receives each cue, taps back, and builds a shared accuracy score.",
     "where": "landing preview and steps, live room, README",
     "test": "npm run test:browser -- --grep @claim:shared-score",
-    "sandbox": "two fresh browser contexts; create and join one room, start a round, receive a cue, return a tap, and see the same scored result"
+    "sandbox": "two fresh browser contexts; create and join one room, enable cues, start a round, receive a cue, return a tap, and see the same scored result"
   },
   {
     "id": "live-relay",
@@ -120,10 +120,10 @@
   },
   {
     "id": "haptic-output",
-    "claim": "Each friend cue uses phone vibration and connected controller haptics when the browser supports them.",
+    "claim": "After the friend chooses Enable vibration, each cue uses phone vibration and connected controller haptics when supported.",
     "where": "landing, live friend view, terms, README",
     "test": "npm run test:browser -- --grep @claim:haptic-output",
-    "sandbox": "two fresh browser contexts; stub both haptic APIs, relay one real cue, and assert vibrate(45) plus dual-rumble actuation"
+    "sandbox": "fresh host and 390 px friend contexts; prove a programmatic click cannot unlock the host, use a trusted tap, delegate to Chromium's native vibration API, relay one cue without a blocked-call error, and assert controller dual-rumble actuation"
   },
   {
     "id": "real-round-duration",

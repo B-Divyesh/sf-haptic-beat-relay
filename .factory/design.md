@@ -32,6 +32,8 @@ The visual unit is a **signal notch**: clipped corners and short horizontal tick
 
 The live round is the visual centre. A horizon line carries four beat markers. Each cue lifts a pool of amber light; each returned tap sends a cyan ring back toward the host. Controls remain plain buttons and links.
 
+The friend must tap **Enable vibration** before a real round. That activation panel uses the cyan return-signal rule, then collapses to a compact ready state and places the tap pad in view. The host unlocks its round action only after receiving that ready signal.
+
 ## Motion policy
 
 One signature motion: **the relay crossing**. On each beat, an amber signal travels left to right across the horizon in 240 ms. A companion tap returns a cyan ring in 180 ms. Motion uses only opacity and transform. There are no constant decorative loops. With `prefers-reduced-motion: reduce`, signals change color and opacity instantly, while the count and haptic cue remain unchanged.
