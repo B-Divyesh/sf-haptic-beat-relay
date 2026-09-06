@@ -1,4 +1,53 @@
-# Haptic Beat Relay — verification 31 handoff
+# Haptic Beat Relay — review 6 handoff
+
+## Review 6 update
+
+**PASS.** Strict review 6 found zero findings and zero untested public claims.
+The implementation reviewed is `eaa617649adcaf745ef3aac9e7740a85fc24ff94`.
+The documentation checkout is
+`626eebda3715e4d96d4481b8eb5ee0f3eddabc02`; it is later report-only work.
+
+A fresh desktop and phone browser showed the job, audience, sample action, and
+three facts before scrolling. The live sample showed Sam, 86% accuracy, and
+three returned taps. Its sample label persisted during a round, Reset restored
+the sample, and no API request or browser storage was used.
+
+From a new clean clone, `npm ci`, `npm test`, `npm run build`, and all 22
+declared claim commands passed. The full suite passed 42 browser tests (eight
+intentional project skips), 18 Rust tests, strict Clippy, format, contracts,
+and the clean entrypoint. The build produced 9.25 KB gzip JavaScript and 4.76
+KB gzip CSS.
+
+Fresh live checks found zero serious or critical Axe issues on eight routes at
+desktop and phone widths. The 30-round relay passed, each of five clients got
+40 accepts then five `429` responses with `Retry-After: 1`, and restart
+persistence kept a room joinable and accepted a new write. The live app has one
+ready HTTP replica, durable `/data`, and matching implementation SHA.
+
+Run the checks with:
+
+```sh
+npm ci
+npm test
+npm run build
+RELAY_ROUNDS=30 npm run test:live-relay
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+npm run test:live-topology
+npm run test:live-persistence
+```
+
+The demo is <https://haptic-beat-relay.sociobot.in/?demo=1>. Physical vibration
+still depends on the browser and device; visual cues remain the fallback.
+
+## Review 6 outcome
+
+All earlier review and verification findings, including the review 5 trusted
+activation finding, remain resolved. No product code was changed during this
+review. Full evidence is recorded in `.factory/review-6.md`.
+
+---
+
+# Verification 31 handoff
 
 ## Verification 31 update
 
