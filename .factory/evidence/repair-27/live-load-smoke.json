@@ -1,0 +1,9 @@
+{
+  "requests": 100,
+  "concurrent": true,
+  "statusCounts": {
+    "200": 100
+  },
+  "elapsedMs": 12957,
+  "requestsPerSecond": 7.7
+}

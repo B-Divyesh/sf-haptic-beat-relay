@@ -1,0 +1,7 @@
+{
+  "invalid": 400,
+  "unknown": 404,
+  "create": 200,
+  "firstFriend": 200,
+  "secondFriend": 409
+}

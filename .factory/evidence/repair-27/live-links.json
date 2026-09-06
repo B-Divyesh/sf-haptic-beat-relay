@@ -1,0 +1,34 @@
+[
+  {
+    "href": "https://haptic-beat-relay.sociobot.in/",
+    "status": 200
+  },
+  {
+    "href": "https://haptic-beat-relay.sociobot.in/?demo=1",
+    "status": 200
+  },
+  {
+    "href": "https://haptic-beat-relay.sociobot.in/host",
+    "status": 200
+  },
+  {
+    "href": "https://haptic-beat-relay.sociobot.in/join",
+    "status": 200
+  },
+  {
+    "href": "https://haptic-beat-relay.sociobot.in/privacy",
+    "status": 200
+  },
+  {
+    "href": "https://haptic-beat-relay.sociobot.in/terms",
+    "status": 200
+  },
+  {
+    "href": "https://sociobot.in/",
+    "status": 200
+  },
+  {
+    "href": "mailto:privacy@sociobot.in",
+    "status": "mailto"
+  }
+]

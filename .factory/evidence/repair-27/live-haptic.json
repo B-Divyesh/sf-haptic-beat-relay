@@ -1,0 +1,45 @@
+{
+  "base": "https://haptic-beat-relay.sociobot.in",
+  "code": "PGD6EZ",
+  "copiedLink": "https://haptic-beat-relay.sociobot.in/join/PGD6EZ",
+  "lockedBeforeTrustedTap": true,
+  "programmaticClickRejected": true,
+  "activationState": "Vibration is enabled. The host can start.",
+  "phoneCalls": [
+    {
+      "duration": 30,
+      "allowed": true,
+      "active": true,
+      "hasBeenActive": true
+    },
+    {
+      "duration": 45,
+      "allowed": true,
+      "active": true,
+      "hasBeenActive": true
+    },
+    {
+      "duration": 45,
+      "allowed": true,
+      "active": true,
+      "hasBeenActive": true
+    }
+  ],
+  "controllerCalls": [
+    {
+      "type": "dual-rumble",
+      "duration": 60,
+      "strongMagnitude": 0.7,
+      "weakMagnitude": 0.4
+    },
+    {
+      "type": "dual-rumble",
+      "duration": 60,
+      "strongMagnitude": 0.7,
+      "weakMagnitude": 0.4
+    }
+  ],
+  "hostScore": "91%",
+  "friendScore": "91%",
+  "errors": []
+}

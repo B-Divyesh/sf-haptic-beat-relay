@@ -1,0 +1,13 @@
+{
+  "focus": {
+    "text": "Skip to main content",
+    "outline": "3px",
+    "outlineColor": "rgb(117, 230, 224)",
+    "visible": true
+  },
+  "motion": {
+    "matches": true,
+    "scroll": "auto",
+    "transition": "1e-05s"
+  }
+}

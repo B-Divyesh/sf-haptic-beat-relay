@@ -1,0 +1,24 @@
+{
+  "firstScreen": {
+    "job": "Send beat cues to a friend's phone",
+    "audience": "For friends and rhythm-game makers who need phone vibration cues and a shared timing score without an account.",
+    "action": "Try it with sample data",
+    "facts": [
+      "01 Free to use",
+      "02 Audio loops stay on the host device",
+      "03 The relay needs a connection"
+    ],
+    "factsBottom": 683.78125,
+    "scrollY": 0
+  },
+  "banner": "Demo — sample data, nothing is saved",
+  "resetScore": "86%",
+  "resetTaps": "3 returned taps.",
+  "apiRequests": [],
+  "externalRequests": [],
+  "storage": {
+    "local": [],
+    "session": [],
+    "indexed": []
+  }
+}
