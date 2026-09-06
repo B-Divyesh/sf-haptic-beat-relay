@@ -1,4 +1,39 @@
-# Haptic Beat Relay — repair 27 handoff
+# Haptic Beat Relay — verification 31 handoff
+
+## Verification 31 update
+
+**PASS.** Independent verification found zero findings and zero untested
+claims. The implementation reviewed is
+`eaa617649adcaf745ef3aac9e7740a85fc24ff94`; deployment documentation is
+`48f512029a30bb300a8b59d4c79f1942124eb69a`; the final release-report
+checkout is `41f4443b9905e641cee6d096df042b9375879cf7`.
+
+Fresh desktop and phone browsers showed the job, audience, first action, and
+three facts before scrolling. The sample remained isolated and reset its
+seeded data. A real friend link rejected a programmatic enable attempt,
+accepted a trusted **Enable vibration** tap, and Chromium accepted both native
+vibration calls without a blocked-call error.
+
+From the clean checkout, `npm test`, `npm run build`, and all 22 exact claim
+commands passed. Live verification found zero serious or critical Axe issues
+on 16 desktop/mobile route scans; one ready replica with durable `/data`; a
+passing restart-persistence check; a 30/30 reconnect proof; and five rate
+bursts with exactly 40 accepts then five 429 responses with `Retry-After: 1`.
+
+Run the same checks with:
+
+```sh
+npm ci
+npm test
+npm run build
+RELAY_ROUNDS=30 npm run test:live-relay
+RELAY_RATE_REPETITIONS=5 npm run test:live-rate-limit
+npm run test:live-topology
+npm run test:live-persistence
+```
+
+The demo is <https://haptic-beat-relay.sociobot.in/?demo=1>. Physical motor
+movement remains device-dependent; the visual cue is the fallback.
 
 ## Outcome
 
